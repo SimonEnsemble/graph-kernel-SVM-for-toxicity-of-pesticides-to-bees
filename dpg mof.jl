@@ -1,31 +1,25 @@
 ### A Pluto.jl notebook ###
-# v0.16.0
+# v0.16.1
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ 6380053e-3103-11ec-1fb0-e77e1b25c9d6
-using Xtals,GraphPlot, LightGraphs, MetaGraphs, Colors, LinearAlgebra 
+using Xtals,GraphPlot, LightGraphs, MetaGraphs, Colors, LinearAlgebra , PlutoUI
 
 # ╔═╡ 9ca0bdec-0d4a-42bc-9cdf-bf3edcb0e053
 rc[:paths][:crystals]
 
-# ╔═╡ 92bebdbf-dbf3-4dce-86b6-3eb01ae9463d
-rc
-
 # ╔═╡ 68b40fac-2830-42f7-b886-3f18b47c0bb0
-xtal1 = Crystal("IRMOF-1.cif")
-
-# ╔═╡ 9734d2b4-c0ad-4c72-ace0-de28f9f351e9
-typeof(xtal1)
+begin
+	xtal1 = Crystal("IRMOF-1.cif")
+	infer_bonds!(xtal1, true)
+end
 
 # ╔═╡ a694954a-63ac-4a6c-8c22-17d5e6ee7682
-xtal2 = Crystal("SBMOF-1.cif")
-
-# ╔═╡ ce7c8946-137a-4b38-8823-d0d916d0bc21
 begin
-	infer_bonds!(xtal1, false)
-	infer_bonds!(xtal2, false)
+	xtal2 = Crystal("SBMOF-1.cif")
+	infer_bonds!(xtal2, true)
 end
 
 # ╔═╡ c9a4e9dd-9a99-42ea-baec-647fc2370f99
@@ -35,13 +29,18 @@ xtal1.bonds
 xtal2.bonds
 
 # ╔═╡ 2eccdc1f-9caa-44fd-93fe-3560b84ddf75
-gplot(xtal1.bonds, nodefillc = [RGB((Xtals.DEFAULT_CPK_COLORS[a] ./ 255)...) for a in xtal1.atoms.species], nodestrokec = colorant"black")
+function viz_graph(xtal::Crystal)
+	gplot(xtal.bonds, 
+	  nodefillc=[RGB((Xtals.DEFAULT_CPK_COLORS[a] ./ 255)...) for a in xtal.atoms.species], 
+	  nodestrokec=colorant"black",
+      nodestrokelw=3)
+end
 
 # ╔═╡ 9517ea54-f96a-4e35-b2ee-427bccb7f996
-gplot(xtal2.bonds, nodefillc = [RGB((Xtals.DEFAULT_CPK_COLORS[a] ./ 255)...) for a in xtal2.atoms.species], nodestrokec = colorant"black")
+viz_graph(xtal1)
 
-# ╔═╡ 516a1b2a-4c7f-4dda-9748-e807fc72c6ad
-xtal1.atoms.species
+# ╔═╡ d77f0972-7370-40c5-9801-2f044f81938d
+viz_graph(xtal2)
 
 # ╔═╡ 350639df-fe11-4742-abae-4df3fab4e004
 function direct_product_graph(molecule_a, molecule_b)
@@ -89,7 +88,7 @@ function direct_product_graph(molecule_a, molecule_b)
 end
 
 # ╔═╡ 932c5e16-d6fb-485e-b14c-b0241fcdc8a0
-function dpg_fast(molecule_a::Crystal, molecule_b::Crystal)
+function dpg_fast(molecule_a::Crystal, molecule_b::Crystal; verbose::Bool=false)
 	axb = MetaGraph(SimpleGraph(0))
 	for i = 1:nv(molecule_a.bonds)
 		for j = 1:nv(molecule_b.bonds)
@@ -99,36 +98,54 @@ function dpg_fast(molecule_a::Crystal, molecule_b::Crystal)
 			end
 		end
 	end
+	if verbose
+		println("# nodes in dpg: ", nv(axb))
+	end
+	
+	# TODO to make faster.
+	for ed_a in edges(molecule_a.bonds)
+		for ed_b in edges(molecule_b.bonds)
+		end
+	end
+	
+	
+	# TODO change this add edges. this way is SLOW b/c u look over pairs of vertices in dpg.
+	for i = 1:nv(axb)
+		vᵢ, v′ᵢ = get_prop(axb, i, :ij)
+		for j = 1:nv(axb)
+			vⱼ, v′ⱼ = get_prop(axb, j, :ij)
+			# every prerequisite should be satisfied
+			if i != j && has_edge(molecule_a.bonds, vᵢ, vⱼ) && has_edge(
+					molecule_b.bonds, v′ᵢ, v′ⱼ)
+				add_edge!(axb, i, j)
+			end
+		end
+	end
+	if verbose
+		println("# edges in dpg: ", ne(axb))
+	end
 	return axb
 end
 
-# ╔═╡ 9906f5bd-6c43-4892-a7f9-92f27e9e319a
-@time dpg = direct_product_graph(xtal1, xtal2)
+# ╔═╡ 7a4f129a-b52d-430b-a821-bf47e3f17bab
+edges(xtal1.bonds)
 
-# ╔═╡ ae4c358e-b036-4152-a4f0-037407a3192c
-gplot(dpg)
+# ╔═╡ 07467c7f-4f42-40e7-9095-0d2d8936115a
+with_terminal() do
+	@time dpg_fast(xtal1, xtal2)
+end
 
 # ╔═╡ 9b8ed5ba-c748-4ebe-bc20-6563fdd6af47
-md"## Compute Random Kernel"
+md"## Random Walk Kernel"
 
 # ╔═╡ b1596f42-7863-4b34-9198-961a4e2c9c85
-m = Matrix(adjacency_matrix(dpg))
+I(3)
 
 # ╔═╡ cd15d883-3794-4f63-8f4a-9a13706e1613
-function dpg_kernel_compute(A, lambda, k)
-	# input M: Adjacency matrix
-	nrow, ncol = size(A)
-	sum = zeros(Int64, nrow, ncol)
-	add = 0
-	for i = 1:k
-		sum = sum + lambda^i * A^i
-	end
-	for i = 1:nrow
-		for j = 1:ncol
-			add = add + sum[i,j]
-		end
-	end
-	return add
+function dpg_kernel(dpg::MetaGraph, γ::Float64)
+	B = I(size(A)[1]) - γ * Matrix(adjacency_matrix(dpg))
+	invB = inv(B)
+	return sum(invB)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -139,6 +156,7 @@ GraphPlot = "a2cc645c-3eea-5389-862e-a155d0052231"
 LightGraphs = "093fc24a-ae57-5d10-9952-331d41423f4d"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MetaGraphs = "626554b9-1ddb-594c-aa3c-2596fe9399a5"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Xtals = "ede5f01d-793e-4c47-9885-c447d1f18d6d"
 
 [compat]
@@ -146,6 +164,7 @@ Colors = "~0.12.8"
 GraphPlot = "~0.4.4"
 LightGraphs = "~1.3.5"
 MetaGraphs = "~0.6.8"
+PlutoUI = "~0.7.16"
 Xtals = "~0.3.6"
 """
 
@@ -287,6 +306,23 @@ git-tree-sha1 = "dd8f15128a91b0079dfe3f4a4a1e190e54ac7164"
 uuid = "a2cc645c-3eea-5389-862e-a155d0052231"
 version = "0.4.4"
 
+[[Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "8d511d5b81240fc8e6802386302675bdf47737b9"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.4"
+
+[[HypertextLiteral]]
+git-tree-sha1 = "f6532909bf3d40b308a0f360b6a0e626c0e263a8"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.1"
+
+[[IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "f7be53659ab06ddc986428d3a9dcc95f6fa6705a"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.2"
+
 [[Inflate]]
 git-tree-sha1 = "f5fc07d4e706b84f72d54eedcc1c13d92fb0871c"
 uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
@@ -409,6 +445,12 @@ version = "1.1.2"
 [[Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+
+[[PlutoUI]]
+deps = ["Base64", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
+git-tree-sha1 = "4c8a7d080daca18545c56f1cac28710c362478f3"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.16"
 
 [[PooledArrays]]
 deps = ["DataAPI", "Future"]
@@ -566,20 +608,17 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╔═╡ Cell order:
 # ╠═6380053e-3103-11ec-1fb0-e77e1b25c9d6
 # ╠═9ca0bdec-0d4a-42bc-9cdf-bf3edcb0e053
-# ╠═92bebdbf-dbf3-4dce-86b6-3eb01ae9463d
 # ╠═68b40fac-2830-42f7-b886-3f18b47c0bb0
-# ╠═9734d2b4-c0ad-4c72-ace0-de28f9f351e9
 # ╠═a694954a-63ac-4a6c-8c22-17d5e6ee7682
-# ╠═ce7c8946-137a-4b38-8823-d0d916d0bc21
 # ╠═c9a4e9dd-9a99-42ea-baec-647fc2370f99
 # ╠═97085c0c-984d-4e88-8f72-c4b825c4b6ba
 # ╠═2eccdc1f-9caa-44fd-93fe-3560b84ddf75
 # ╠═9517ea54-f96a-4e35-b2ee-427bccb7f996
-# ╠═516a1b2a-4c7f-4dda-9748-e807fc72c6ad
+# ╠═d77f0972-7370-40c5-9801-2f044f81938d
 # ╠═350639df-fe11-4742-abae-4df3fab4e004
 # ╠═932c5e16-d6fb-485e-b14c-b0241fcdc8a0
-# ╠═9906f5bd-6c43-4892-a7f9-92f27e9e319a
-# ╠═ae4c358e-b036-4152-a4f0-037407a3192c
+# ╠═7a4f129a-b52d-430b-a821-bf47e3f17bab
+# ╠═07467c7f-4f42-40e7-9095-0d2d8936115a
 # ╟─9b8ed5ba-c748-4ebe-bc20-6563fdd6af47
 # ╠═b1596f42-7863-4b34-9198-961a4e2c9c85
 # ╠═cd15d883-3794-4f63-8f4a-9a13706e1613
