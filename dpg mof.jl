@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.16.1
+# v0.16.0
 
 using Markdown
 using InteractiveUtils
@@ -132,8 +132,11 @@ edges(xtal1.bonds)
 
 # ╔═╡ 07467c7f-4f42-40e7-9095-0d2d8936115a
 with_terminal() do
-	@time dpg_fast(xtal1, xtal2)
+	@time axb = dpg_fast(xtal1, xtal2)
 end
+
+# ╔═╡ 75ff87c8-115e-4a1d-8d21-2f830f8c6e77
+axb = dpg_fast(xtal1, xtal2)
 
 # ╔═╡ 9b8ed5ba-c748-4ebe-bc20-6563fdd6af47
 md"## Random Walk Kernel"
@@ -143,10 +146,22 @@ I(3)
 
 # ╔═╡ cd15d883-3794-4f63-8f4a-9a13706e1613
 function dpg_kernel(dpg::MetaGraph, γ::Float64)
-	B = I(size(A)[1]) - γ * Matrix(adjacency_matrix(dpg))
+	## γ need to be < 1/a, a >= Δ
+	A = Matrix(adjacency_matrix(dpg))
+	B = I(size(A)[1]) - γ * A
 	invB = inv(B)
 	return sum(invB)
 end
+
+# ╔═╡ cc9c9c62-62dc-4787-adf0-44b9c3486f4c
+md" $\Delta(g)$ will Return the maximum degree of vertices in $g$."
+
+# ╔═╡ 8c33e755-b6a2-43b6-95ee-6413d95fe22d
+Δ(axb)
+
+# ╔═╡ a2920e9e-5866-4585-b108-933d7db6f771
+dpg_kernel(axb, 0.1)
+# takes about 624 s
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -619,8 +634,12 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═932c5e16-d6fb-485e-b14c-b0241fcdc8a0
 # ╠═7a4f129a-b52d-430b-a821-bf47e3f17bab
 # ╠═07467c7f-4f42-40e7-9095-0d2d8936115a
+# ╠═75ff87c8-115e-4a1d-8d21-2f830f8c6e77
 # ╟─9b8ed5ba-c748-4ebe-bc20-6563fdd6af47
 # ╠═b1596f42-7863-4b34-9198-961a4e2c9c85
 # ╠═cd15d883-3794-4f63-8f4a-9a13706e1613
+# ╠═cc9c9c62-62dc-4787-adf0-44b9c3486f4c
+# ╠═8c33e755-b6a2-43b6-95ee-6413d95fe22d
+# ╠═a2920e9e-5866-4585-b108-933d7db6f771
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
