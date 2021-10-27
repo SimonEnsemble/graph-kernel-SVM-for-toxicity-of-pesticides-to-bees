@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.16.0
+# v0.16.3
 
 using Markdown
 using InteractiveUtils
@@ -243,6 +243,65 @@ begin
 	loc_xx, loc_yx = spring_layout(gxh, 1)
 	gplot(gxh, loc_xx, loc_yx, nodefillc = combine_colors, nodelabel = nodelabel)
 end
+
+# ╔═╡ 0cd5ac06-ebbe-407c-9bf7-358ad344709a
+function dpg_fast(graph_a::SimpleGraph, species_a::Vector{Symbol}, graph_b::SimpleGraph, species_b::Vector{Symbol}; verbose::Bool=false)
+		axb = MetaGraph(SimpleGraph(0))
+		ab_vertex_pair_to_axb_vertex = Dict{Tuple{Int, Int}, Int}()
+		for i = 1:nv(graph_a)
+			for j = 1:nv(graph_b)
+				if species_a[i] == species_b[j]
+					add_vertex!(axb)
+					set_props!(axb, nv(axb), Dict(:ij => (i, j)))
+					ab_vertex_pair_to_axb_vertex[(i, j)] = nv(axb)
+				end
+			end
+		end
+		if verbose
+			println("# nodes in dpg: ", nv(axb))
+		end
+		
+		# TODO to make faster.
+		for ed_a in edges(graph_a)
+			i1, i2 = Tuple(ed_a)
+			for ed_b in edges(graph_b)
+				j1, j2 = Tuple(ed_b)
+				if haskey(ab_vertex_pair_to_axb_vertex, (i1, j1)) &&
+				   haskey(ab_vertex_pair_to_axb_vertex, (i2, j2))
+					add_edge!(axb, ab_vertex_pair_to_axb_vertex[(i1, j1)],
+						      ab_vertex_pair_to_axb_vertex[(i2, j2)])
+				end
+				if haskey(ab_vertex_pair_to_axb_vertex, (i1, j2)) &&
+				   haskey(ab_vertex_pair_to_axb_vertex, (i2, j1))
+					add_edge!(axb, ab_vertex_pair_to_axb_vertex[(i1, j2)],
+						      ab_vertex_pair_to_axb_vertex[(i2, j1)])
+				end
+			end
+		end
+		return axb	
+end
+		# TODO change this add edges. this way is SLOW b/c u look over pairs of vertices in dpg.
+		# for i = 1:nv(axb)
+		# 	vᵢ, v′ᵢ = get_prop(axb, i, :ij)
+		# 	for j = 1:nv(axb)
+		# 		vⱼ, v′ⱼ = get_prop(axb, j, :ij)
+		# 		# every prerequisite should be satisfied
+		# 		if i != j && has_edge(molecule_a.bonds, vᵢ, vⱼ) && has_edge(
+		# 				molecule_b.bonds, v′ᵢ, v′ⱼ)
+		# 			add_edge!(axb, i, j)
+		# 		end
+		# 	end
+		# end
+		# if verbose
+		# 	println("# edges in dpg: ", ne(axb))
+		# end
+		# return axb
+
+# ╔═╡ 09251337-3d7b-4cdb-ab2d-e2ae66dbebf4
+m = dpg_fast(molecule_g.graph, molecule_g.species, molecule_h.graph, molecule_h.species)
+
+# ╔═╡ 7860255a-73dc-492b-95d1-2449ef814db0
+gplot(m, nodelabel = [get_prop(m, i, :ij) for i = 1:nv(m)])
 
 # ╔═╡ 9cb9ffce-37e2-4335-a22e-153c3e9bbbbb
 md"## Direct Product Kernel
@@ -675,6 +734,9 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╟─3546f9b7-ede7-437f-b0b4-a87dc5eeabf6
 # ╠═b4430262-0f57-46fb-8411-241201075d5f
 # ╠═df459344-b8e1-4e70-869e-b41337d835ce
+# ╠═0cd5ac06-ebbe-407c-9bf7-358ad344709a
+# ╠═09251337-3d7b-4cdb-ab2d-e2ae66dbebf4
+# ╠═7860255a-73dc-492b-95d1-2449ef814db0
 # ╟─9cb9ffce-37e2-4335-a22e-153c3e9bbbbb
 # ╠═ed1c371f-9d78-4e16-bdb2-55646ded7c8d
 # ╠═22cf20e8-3a9b-4b9a-bf96-dcc6c4d93765

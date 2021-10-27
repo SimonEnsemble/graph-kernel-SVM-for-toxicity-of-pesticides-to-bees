@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 6380053e-3103-11ec-1fb0-e77e1b25c9d6
-using Xtals,GraphPlot, LightGraphs, MetaGraphs, Colors, LinearAlgebra , PlutoUI
+using Xtals,GraphPlot, MetaGraphs, Colors, LinearAlgebra , PlutoUI, Graphs
 
 # ╔═╡ 9ca0bdec-0d4a-42bc-9cdf-bf3edcb0e053
 rc[:paths][:crystals]
@@ -28,9 +28,15 @@ xtal1.bonds
 # ╔═╡ 97085c0c-984d-4e88-8f72-c4b825c4b6ba
 xtal2.bonds
 
+# ╔═╡ b8d86f2c-1c5c-4355-a6eb-cdc315dea337
+toy_graphs = MetaGraph(SimpleGraph(3))
+
+# ╔═╡ baf83f29-68fe-45ec-bc2a-d91607d8dfce
+gplot(xtal1.bonds)
+
 # ╔═╡ 2eccdc1f-9caa-44fd-93fe-3560b84ddf75
 function viz_graph(xtal::Crystal)
-	gplot(xtal.bonds, 
+	gplot(SimpleGraph(xtal.bonds), 
 	  nodefillc=[RGB((Xtals.DEFAULT_CPK_COLORS[a] ./ 255)...) for a in xtal.atoms.species], 
 	  nodestrokec=colorant"black",
       nodestrokelw=3)
@@ -88,47 +94,66 @@ function direct_product_graph(molecule_a, molecule_b)
 end
 
 # ╔═╡ 932c5e16-d6fb-485e-b14c-b0241fcdc8a0
-function dpg_fast(molecule_a::Crystal, molecule_b::Crystal; verbose::Bool=false)
-	axb = MetaGraph(SimpleGraph(0))
-	for i = 1:nv(molecule_a.bonds)
-		for j = 1:nv(molecule_b.bonds)
-			if molecule_a.atoms.species[i] == molecule_b.atoms.species[j]
-				add_vertex!(axb)
-				set_props!(axb, nv(axb), Dict(:ij => (i, j)))
+begin
+	function dpg_fast(graph_a::SimpleGraph, species_a::Vector{Symbol}, graph_b::SimpleGraph, species_b::Vector{Symbol}; verbose::Bool=false)
+		axb = MetaGraph(SimpleGraph(0))
+		ab_vertex_pair_to_axb_vertex = Dict{Tuple{Int, Int}, Int}()
+		for i = 1:nv(graph_a)
+			for j = 1:nv(graph_b)
+				if species_a[i] == species_b[j]
+					add_vertex!(axb)
+					set_props!(axb, nv(axb), Dict(:ij => (i, j)))
+					ab_vertex_pair_to_axb_vertex[(i, j)] = nv(axb)
+				end
 			end
 		end
-	end
-	if verbose
-		println("# nodes in dpg: ", nv(axb))
-	end
-	
-	# TODO to make faster.
-	for ed_a in edges(molecule_a.bonds)
-		for ed_b in edges(molecule_b.bonds)
+		if verbose
+			println("# nodes in dpg: ", nv(axb))
 		end
-	end
-	
-	
-	# TODO change this add edges. this way is SLOW b/c u look over pairs of vertices in dpg.
-	for i = 1:nv(axb)
-		vᵢ, v′ᵢ = get_prop(axb, i, :ij)
-		for j = 1:nv(axb)
-			vⱼ, v′ⱼ = get_prop(axb, j, :ij)
-			# every prerequisite should be satisfied
-			if i != j && has_edge(molecule_a.bonds, vᵢ, vⱼ) && has_edge(
-					molecule_b.bonds, v′ᵢ, v′ⱼ)
-				add_edge!(axb, i, j)
+		
+		# TODO to make faster.
+		for ed_a in edges(graph_a)
+			i1, i2 = Tuple(ed_a)
+			for ed_b in edges(graph_b)
+				j1, j2 = Tuple(ed_b)
+				if haskey(ab_vertex_pair_to_axb_vertex, (i1, j1)) &&
+					haskey(ab_vertex_pair_to_axb_vertex, (i2, j2))
+					add_edge!(axb, ab_vertex_pair_to_axb_vertex[(i1, j1)],
+					          ab_vertex_pair_to_axb_vertex[(i2, j2)])
+				end
+				if haskey(ab_vertex_pair_to_axb_vertex, (i1, j2)) &&
+					haskey(ab_vertex_pair_to_axb_vertex, (i2, j1))
+					add_edge!(axb, ab_vertex_pair_to_axb_vertex[(i1, j2)],
+					          ab_vertex_pair_to_axb_vertex[(i2, j1)])
+				end
 			end
 		end
+		return axb
 	end
-	if verbose
-		println("# edges in dpg: ", ne(axb))
+		
+		
+		# TODO change this add edges. this way is SLOW b/c u look over pairs of vertices in dpg.
+	# 	for i = 1:nv(axb)
+	# 		vᵢ, v′ᵢ = get_prop(axb, i, :ij)
+	# 		for j = 1:nv(axb)
+	# 			vⱼ, v′ⱼ = get_prop(axb, j, :ij)
+	# 			# every prerequisite should be satisfied
+	# 			if i != j && has_edge(molecule_a.bonds, vᵢ, vⱼ) && has_edge(
+	# 					molecule_b.bonds, v′ᵢ, v′ⱼ)
+	# 				add_edge!(axb, i, j)
+	# 			end
+	# 		end
+	# 	end
+	# 	if verbose
+	# 		println("# edges in dpg: ", ne(axb))
+	# 	end
+	# 	return axb
+	# end
+	
+	function dpg_fast(molecule_a::Crystal, molecule_b::Crystal; verbose::Bool=false)
+		return dpg_fast(molecula_a.bonds, molecule_a.atoms.species, molecule_b.bonds, molecule_b.atoms.species, verbose = verbose)
 	end
-	return axb
 end
-
-# ╔═╡ 7a4f129a-b52d-430b-a821-bf47e3f17bab
-edges(xtal1.bonds)
 
 # ╔═╡ 07467c7f-4f42-40e7-9095-0d2d8936115a
 with_terminal() do
@@ -160,15 +185,45 @@ md" $\Delta(g)$ will Return the maximum degree of vertices in $g$."
 Δ(axb)
 
 # ╔═╡ a2920e9e-5866-4585-b108-933d7db6f771
-dpg_kernel(axb, 0.1)
+# dpg_kernel(axb, 0.1)
 # takes about 624 s
+
+# ╔═╡ a5ad2868-ac7f-4263-b602-819d1de5763a
+md"## Try k-PCA on cages
+"
+
+# ╔═╡ f21b12e5-cfb3-44d9-ad8e-0d09449ab2bf
+B9 = read_xyz("all_cages/B9.xyz")
+
+# ╔═╡ c4d6f3c1-37be-4167-9348-20c44ec7a863
+A11 = read_xyz("all_cages/A11.xyz")
+
+# ╔═╡ d511a2f3-bdc9-454a-839e-10a050f0af3f
+begin
+	B9_bonds = infer_bonds(B9)
+	A11_bonds = infer_bonds(A11)
+end
+
+# ╔═╡ 419cf666-8a18-4e3d-8ea4-804b26ea10ff
+
+
+# ╔═╡ ec49084c-5a87-41d5-a3f6-6bc86f387fca
+function viz_atoms_graph(atoms::Atoms)
+	gplot(atoms.bonds, 
+	  nodefillc=[RGB((Xtals.DEFAULT_CPK_COLORS[a] ./ 255)...) for a in atoms.species], 
+	  nodestrokec=colorant"black",
+      nodestrokelw=3)
+end
+
+# ╔═╡ 650d7090-54a6-49af-97d1-39a093e3dab7
+dpg_fast(A11_bonds, B9_bonds)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
 GraphPlot = "a2cc645c-3eea-5389-862e-a155d0052231"
-LightGraphs = "093fc24a-ae57-5d10-9952-331d41423f4d"
+Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MetaGraphs = "626554b9-1ddb-594c-aa3c-2596fe9399a5"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
@@ -176,11 +231,11 @@ Xtals = "ede5f01d-793e-4c47-9885-c447d1f18d6d"
 
 [compat]
 Colors = "~0.12.8"
-GraphPlot = "~0.4.4"
-LightGraphs = "~1.3.5"
+GraphPlot = "~0.5.0"
+Graphs = "~1.4.1"
 MetaGraphs = "~0.6.8"
 PlutoUI = "~0.7.16"
-Xtals = "~0.3.6"
+Xtals = "~0.3.7"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -316,10 +371,16 @@ deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
 [[GraphPlot]]
-deps = ["ArnoldiMethod", "ColorTypes", "Colors", "Compose", "DelimitedFiles", "LightGraphs", "LinearAlgebra", "Random", "SparseArrays"]
-git-tree-sha1 = "dd8f15128a91b0079dfe3f4a4a1e190e54ac7164"
+deps = ["ArnoldiMethod", "ColorTypes", "Colors", "Compose", "DelimitedFiles", "Graphs", "LinearAlgebra", "Random", "SparseArrays"]
+git-tree-sha1 = "5e51d9d9134ebcfc556b82428521fe92f709e512"
 uuid = "a2cc645c-3eea-5389-862e-a155d0052231"
-version = "0.4.4"
+version = "0.5.0"
+
+[[Graphs]]
+deps = ["ArnoldiMethod", "DataStructures", "Distributed", "Inflate", "LinearAlgebra", "Random", "SharedArrays", "SimpleTraits", "SparseArrays", "Statistics"]
+git-tree-sha1 = "92243c07e786ea3458532e199eb3feee0e7e08eb"
+uuid = "86223c79-3864-5bf0-83f7-82e725a168b6"
+version = "1.4.1"
 
 [[Hyperscript]]
 deps = ["Test"]
@@ -328,9 +389,9 @@ uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
 version = "0.0.4"
 
 [[HypertextLiteral]]
-git-tree-sha1 = "f6532909bf3d40b308a0f360b6a0e626c0e263a8"
+git-tree-sha1 = "5efcf53d798efede8fee5b2c8b09284be359bf24"
 uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
-version = "0.9.1"
+version = "0.9.2"
 
 [[IOCapture]]
 deps = ["Logging", "Random"]
@@ -485,9 +546,9 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [[PyCall]]
 deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
-git-tree-sha1 = "169bb8ea6b1b143c5cf57df6d34d022a7b60c6db"
+git-tree-sha1 = "4ba3651d33ef76e24fef6a598b63ffd1c5e1cd17"
 uuid = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
-version = "1.92.3"
+version = "1.92.5"
 
 [[REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -513,9 +574,9 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
 [[SentinelArrays]]
 deps = ["Dates", "Random"]
-git-tree-sha1 = "54f37736d8934a12a200edea2f9206b03bdf3159"
+git-tree-sha1 = "f45b34656397a1f6e729901dc9ef679610bd12b5"
 uuid = "91c51154-3ec4-41a3-a24f-3f23e20d615c"
-version = "1.3.7"
+version = "1.3.8"
 
 [[Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
@@ -597,15 +658,15 @@ uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
 [[VersionParsing]]
-git-tree-sha1 = "80229be1f670524750d905f8fc8148e5a8c4537f"
+git-tree-sha1 = "e575cf85535c7c3292b4d89d89cc29e8c3098e47"
 uuid = "81def892-9a0e-5fdd-b105-ffc91e053289"
-version = "1.2.0"
+version = "1.2.1"
 
 [[Xtals]]
 deps = ["Bio3DView", "CSV", "DataFrames", "JLD2", "LightGraphs", "LinearAlgebra", "Logging", "MetaGraphs", "Printf", "PyCall", "UUIDs"]
-git-tree-sha1 = "a40db3ec7ac5c1d4a08d97e8d577a18672008b73"
+git-tree-sha1 = "28da83a0d4b2691e26b2af51a8bf58a20f738b1a"
 uuid = "ede5f01d-793e-4c47-9885-c447d1f18d6d"
-version = "0.3.6"
+version = "0.3.7"
 
 [[Zlib_jll]]
 deps = ["Libdl"]
@@ -627,19 +688,27 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═a694954a-63ac-4a6c-8c22-17d5e6ee7682
 # ╠═c9a4e9dd-9a99-42ea-baec-647fc2370f99
 # ╠═97085c0c-984d-4e88-8f72-c4b825c4b6ba
+# ╠═b8d86f2c-1c5c-4355-a6eb-cdc315dea337
+# ╠═baf83f29-68fe-45ec-bc2a-d91607d8dfce
 # ╠═2eccdc1f-9caa-44fd-93fe-3560b84ddf75
 # ╠═9517ea54-f96a-4e35-b2ee-427bccb7f996
 # ╠═d77f0972-7370-40c5-9801-2f044f81938d
 # ╠═350639df-fe11-4742-abae-4df3fab4e004
 # ╠═932c5e16-d6fb-485e-b14c-b0241fcdc8a0
-# ╠═7a4f129a-b52d-430b-a821-bf47e3f17bab
 # ╠═07467c7f-4f42-40e7-9095-0d2d8936115a
 # ╠═75ff87c8-115e-4a1d-8d21-2f830f8c6e77
 # ╟─9b8ed5ba-c748-4ebe-bc20-6563fdd6af47
 # ╠═b1596f42-7863-4b34-9198-961a4e2c9c85
 # ╠═cd15d883-3794-4f63-8f4a-9a13706e1613
-# ╠═cc9c9c62-62dc-4787-adf0-44b9c3486f4c
+# ╟─cc9c9c62-62dc-4787-adf0-44b9c3486f4c
 # ╠═8c33e755-b6a2-43b6-95ee-6413d95fe22d
 # ╠═a2920e9e-5866-4585-b108-933d7db6f771
+# ╟─a5ad2868-ac7f-4263-b602-819d1de5763a
+# ╠═f21b12e5-cfb3-44d9-ad8e-0d09449ab2bf
+# ╠═c4d6f3c1-37be-4167-9348-20c44ec7a863
+# ╠═d511a2f3-bdc9-454a-839e-10a050f0af3f
+# ╠═419cf666-8a18-4e3d-8ea4-804b26ea10ff
+# ╠═ec49084c-5a87-41d5-a3f6-6bc86f387fca
+# ╠═650d7090-54a6-49af-97d1-39a093e3dab7
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
