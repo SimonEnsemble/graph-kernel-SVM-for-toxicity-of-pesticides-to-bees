@@ -47,7 +47,7 @@ end
 # ╔═╡ 8dd25513-e93f-4e8f-9278-6bcc71015cb2
 begin
 	# the fastest method, store the vertex pair as a matrix
-	function direct_product_graph(graph_a::MetaGraph, species_a::Vector{Symbol}, graph_b::MetaGraph, species_b::Vector{Symbol}; verbose::Bool=false)
+	function direct_product_graph(graph_a::Union{SimpleGraph, MetaGraph}, species_a::Vector{Symbol}, graph_b::Union{SimpleGraph, MetaGraph}, species_b::Vector{Symbol}; verbose::Bool=false)
 		axb = MetaGraph(SimpleGraph(0))
 		# use a matrix to store the vertex no. from both graph_a & graph_b, Aᵢⱼ
 		ab_vertex_pair_to_axb_vertex = zeros(Int, nv(graph_a), nv(graph_b))
@@ -90,11 +90,6 @@ begin
 	# use the same function when we compute the dpg of two crystal
 	function direct_product_graph(crystal_a::Crystal, crystal_b::Crystal; verbose::Bool=false)
 		return direct_product_graph(crystal_a.bonds, crystal_a.atoms.species, crystal_b.bonds, crystal_b.atoms.species, verbose = verbose)
-	end
-	
-	# sometimes the type of the graph may be SimpleGraph
-	function direct_product_graph(graph_a::SimpleGraph, species_a::Vector{Symbol}, graph_b::SimpleGraph, species_b::Vector{Symbol}; verbose::Bool=false)
-		return direct_product_graph(MetaGraph(graph_a), species_a, MetaGraph(graph_b), species_b, verbose = verbose)
 	end
 end
 
