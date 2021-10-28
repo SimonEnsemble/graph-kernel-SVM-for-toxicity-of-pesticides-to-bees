@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.16.4
+# v0.17.0
 
 using Markdown
 using InteractiveUtils
@@ -9,6 +9,7 @@ using Graphs, MetaGraphs, Xtals, GraphPlot, Colors, PlutoUI
 
 # ╔═╡ 98304f6c-c761-47db-9b46-9e7d0a8a098d
 begin
+	# first method, store as a dict
 	function direct_product_graph(graph_a::MetaGraph, species_a::Vector{Symbol}, graph_b::MetaGraph, species_b::Vector{Symbol}; verbose::Bool=false)
 		axb = MetaGraph(SimpleGraph(0))
 		ab_vertex_pair_to_axb_vertex = Dict{Tuple{Int, Int}, Int}()
@@ -52,6 +53,52 @@ begin
 	end
 end
 
+# ╔═╡ 8dd25513-e93f-4e8f-9278-6bcc71015cb2
+begin
+	# second method, store as a matrix
+	function direct_product_graph_2(graph_a::MetaGraph, species_a::Vector{Symbol}, graph_b::MetaGraph, species_b::Vector{Symbol}; verbose::Bool=false)
+		axb = MetaGraph(SimpleGraph(0))
+		ab_vertex_pair_to_axb_vertex = zeros(Int, nv(graph_a), nv(graph_b))
+		for i = 1:nv(graph_a)
+			for j = 1:nv(graph_b)
+				if species_a[i] == species_b[j]
+					add_vertex!(axb)
+					ab_vertex_pair_to_axb_vertex[i, j] = nv(axb)
+				end
+			end
+		end
+		if verbose
+			println("# nodes in dpg: ", nv(axb))
+		end
+		
+		for ed_a in edges(graph_a)
+			a_1, a_2 = Tuple(ed_a)
+			for ed_b in edges(graph_b)
+				b_1, b_2 = Tuple(ed_b)
+				if ab_vertex_pair_to_axb_vertex[a_1, b_1] !== 0 &&
+					ab_vertex_pair_to_axb_vertex[a_2, b_2] !== 0
+					add_edge!(axb, ab_vertex_pair_to_axb_vertex[a_1, b_1],
+					          ab_vertex_pair_to_axb_vertex[a_2, b_2])
+				end
+				if ab_vertex_pair_to_axb_vertex[a_1, b_2] !== 0 &&
+					ab_vertex_pair_to_axb_vertex[a_2, b_1] !== 0
+					add_edge!(axb, ab_vertex_pair_to_axb_vertex[a_1, b_2],
+					          ab_vertex_pair_to_axb_vertex[a_2, b_1])
+				end
+			end
+		end
+		if verbose
+			println("# edges in dpg: ", ne(axb))
+		end
+		
+		return axb
+	end
+	
+	function direct_product_graph_2(crystal_a::Crystal, crystal_b::Crystal; verbose::Bool=false)
+		return direct_product_graph_2(crystal_a.bonds, crystal_a.atoms.species, crystal_b.bonds, crystal_b.atoms.species, verbose = verbose)
+	end
+end
+
 # ╔═╡ 188837dc-7a81-4334-95ad-7650a2dbab80
 # test two crystal first
 begin
@@ -80,6 +127,12 @@ viz_graph(xtal2)
 with_terminal() do
 	@time axb = direct_product_graph(xtal1, xtal2)
 end
+
+# ╔═╡ 21b22bb6-0381-4747-867e-3958bbf7b711
+with_terminal() do
+	@time axb = direct_product_graph_2(xtal1, xtal2)
+end
+# method 2 win!
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -540,10 +593,12 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╔═╡ Cell order:
 # ╠═9a9d9db0-3768-11ec-2f64-a1750073facb
 # ╠═98304f6c-c761-47db-9b46-9e7d0a8a098d
+# ╠═8dd25513-e93f-4e8f-9278-6bcc71015cb2
 # ╠═188837dc-7a81-4334-95ad-7650a2dbab80
 # ╠═cbaf8b1d-36ef-4ad2-9d0e-d27dc8d78541
 # ╠═b9f605c3-8f93-4c60-bf50-f81d7855d321
 # ╠═2d4212cb-350d-4c70-85d3-771ccebc4dea
 # ╠═b9c366a2-f5bc-4da7-a5a2-d0df5bf7c094
+# ╠═21b22bb6-0381-4747-867e-3958bbf7b711
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
