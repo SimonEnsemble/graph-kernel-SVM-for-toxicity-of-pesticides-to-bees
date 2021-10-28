@@ -5,59 +5,51 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 9a9d9db0-3768-11ec-2f64-a1750073facb
-using Graphs, MetaGraphs, Xtals, GraphPlot, Colors, PlutoUI
+using Graphs, MetaGraphs, GraphPlot, Colors, PlutoUI, Xtals, Test
 
-# ╔═╡ 98304f6c-c761-47db-9b46-9e7d0a8a098d
+# ╔═╡ e4120248-f8f6-4c47-b26f-84d2cb39ef39
+md" ## Construct Molecule and test direct product graph function
+"
+
+# ╔═╡ d201125d-501c-4b01-a1bf-05fba7f20aee
+# Construct two melecule for test
+struct Molecule
+	species::Vector{Symbol}
+	graph::SimpleGraph
+end
+
+# ╔═╡ bf37c780-55a8-41e6-92aa-0275b3486bb0
+# use the two molecule in graph kerenel survey paper
 begin
-	# first method, store as a dict
-	function direct_product_graph(graph_a::MetaGraph, species_a::Vector{Symbol}, graph_b::MetaGraph, species_b::Vector{Symbol}; verbose::Bool=false)
-		axb = MetaGraph(SimpleGraph(0))
-		ab_vertex_pair_to_axb_vertex = Dict{Tuple{Int, Int}, Int}()
-		for i = 1:nv(graph_a)
-			for j = 1:nv(graph_b)
-				if species_a[i] == species_b[j]
-					add_vertex!(axb)
-					ab_vertex_pair_to_axb_vertex[(i, j)] = nv(axb)
-				end
-			end
-		end
-		if verbose
-			println("# nodes in dpg: ", nv(axb))
-		end
-		
-		for ed_a in edges(graph_a)
-			a_1, a_2 = Tuple(ed_a)
-			for ed_b in edges(graph_b)
-				b_1, b_2 = Tuple(ed_b)
-				if haskey(ab_vertex_pair_to_axb_vertex, (a_1, b_1)) &&
-					haskey(ab_vertex_pair_to_axb_vertex, (a_2, b_2))
-					add_edge!(axb, ab_vertex_pair_to_axb_vertex[(a_1, b_1)],
-					          ab_vertex_pair_to_axb_vertex[(a_2, b_2)])
-				end
-				if haskey(ab_vertex_pair_to_axb_vertex, (a_1, b_2)) &&
-					haskey(ab_vertex_pair_to_axb_vertex, (a_2, b_1))
-					add_edge!(axb, ab_vertex_pair_to_axb_vertex[(a_1, b_2)],
-					          ab_vertex_pair_to_axb_vertex[(a_2, b_1)])
-				end
-			end
-		end
-		if verbose
-			println("# edges in dpg: ", ne(axb))
-		end
-		
-		return axb
+	molecule_a = Molecule([:C, :O, :O, :C], SimpleGraph(4))
+	molecule_b = Molecule([:C, :C, :O, :O], SimpleGraph(4))
+	a_edges = [(1,2), (1,3), (1,4), (2,4), (3,4)]
+	b_edges = [(1,2), (2,3), (2,4)]
+	for (vᵢ, vⱼ) in a_edges
+		add_edge!(molecule_a.graph, vᵢ, vⱼ)
 	end
-	
-	function direct_product_graph(crystal_a::Crystal, crystal_b::Crystal; verbose::Bool=false)
-		return direct_product_graph(crystal_a.bonds, crystal_a.atoms.species, crystal_b.bonds, crystal_b.atoms.species, verbose = verbose)
+	for (uᵢ, uⱼ) in b_edges
+		add_edge!(molecule_b.graph, uᵢ, uⱼ)
 	end
+end
+
+# ╔═╡ 4d6aacc5-499b-4d98-b9e7-49047d250ca9
+# give the test result
+begin
+	axb = MetaGraph(8)
+	axb_edges = [(1,8), (2,3), (2,4), (2,5), (2,6), (2,7), (3,8), (4,8), (5,8), (6,8)]
+	for (i, j) in axb_edges
+		add_edge!(axb, i, j)
+	end
+	axb
 end
 
 # ╔═╡ 8dd25513-e93f-4e8f-9278-6bcc71015cb2
 begin
-	# second method, store as a matrix
-	function direct_product_graph_2(graph_a::MetaGraph, species_a::Vector{Symbol}, graph_b::MetaGraph, species_b::Vector{Symbol}; verbose::Bool=false)
+	# the fastest method, store the vertex pair as a matrix
+	function direct_product_graph(graph_a::MetaGraph, species_a::Vector{Symbol}, graph_b::MetaGraph, species_b::Vector{Symbol}; verbose::Bool=false)
 		axb = MetaGraph(SimpleGraph(0))
+		# use a matrix to store the vertex no. from both graph_a & graph_b, Aᵢⱼ
 		ab_vertex_pair_to_axb_vertex = zeros(Int, nv(graph_a), nv(graph_b))
 		for i = 1:nv(graph_a)
 			for j = 1:nv(graph_b)
@@ -70,7 +62,8 @@ begin
 		if verbose
 			println("# nodes in dpg: ", nv(axb))
 		end
-		
+
+		# loop over every edge in graph a&b
 		for ed_a in edges(graph_a)
 			a_1, a_2 = Tuple(ed_a)
 			for ed_b in edges(graph_b)
@@ -93,11 +86,25 @@ begin
 		
 		return axb
 	end
+
+	# use the same function when we compute the dpg of two crystal
+	function direct_product_graph(crystal_a::Crystal, crystal_b::Crystal; verbose::Bool=false)
+		return direct_product_graph(crystal_a.bonds, crystal_a.atoms.species, crystal_b.bonds, crystal_b.atoms.species, verbose = verbose)
+	end
 	
-	function direct_product_graph_2(crystal_a::Crystal, crystal_b::Crystal; verbose::Bool=false)
-		return direct_product_graph_2(crystal_a.bonds, crystal_a.atoms.species, crystal_b.bonds, crystal_b.atoms.species, verbose = verbose)
+	# sometimes the type of the graph may be SimpleGraph
+	function direct_product_graph(graph_a::SimpleGraph, species_a::Vector{Symbol}, graph_b::SimpleGraph, species_b::Vector{Symbol}; verbose::Bool=false)
+		return direct_product_graph(MetaGraph(graph_a), species_a, MetaGraph(graph_b), species_b, verbose = verbose)
 	end
 end
+
+# ╔═╡ 5c2331bb-c150-4605-9d52-a649d296b46b
+## Test if axb equals to the algorithm result
+@test axb == direct_product_graph(molecule_a.graph, molecule_a.species, molecule_b.graph, molecule_b.species)
+
+# ╔═╡ 3642b8f6-a169-4aef-94ab-cd3b59033a46
+md"## Test the time spend by this function using two xtals
+"
 
 # ╔═╡ 188837dc-7a81-4334-95ad-7650a2dbab80
 # test two crystal first
@@ -128,12 +135,6 @@ with_terminal() do
 	@time axb = direct_product_graph(xtal1, xtal2)
 end
 
-# ╔═╡ 21b22bb6-0381-4747-867e-3958bbf7b711
-with_terminal() do
-	@time axb = direct_product_graph_2(xtal1, xtal2)
-end
-# method 2 win!
-
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -142,6 +143,7 @@ GraphPlot = "a2cc645c-3eea-5389-862e-a155d0052231"
 Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 MetaGraphs = "626554b9-1ddb-594c-aa3c-2596fe9399a5"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Xtals = "ede5f01d-793e-4c47-9885-c447d1f18d6d"
 
 [compat]
@@ -592,13 +594,17 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 
 # ╔═╡ Cell order:
 # ╠═9a9d9db0-3768-11ec-2f64-a1750073facb
-# ╠═98304f6c-c761-47db-9b46-9e7d0a8a098d
+# ╟─e4120248-f8f6-4c47-b26f-84d2cb39ef39
+# ╠═d201125d-501c-4b01-a1bf-05fba7f20aee
+# ╠═bf37c780-55a8-41e6-92aa-0275b3486bb0
+# ╠═4d6aacc5-499b-4d98-b9e7-49047d250ca9
 # ╠═8dd25513-e93f-4e8f-9278-6bcc71015cb2
+# ╠═5c2331bb-c150-4605-9d52-a649d296b46b
+# ╟─3642b8f6-a169-4aef-94ab-cd3b59033a46
 # ╠═188837dc-7a81-4334-95ad-7650a2dbab80
 # ╠═cbaf8b1d-36ef-4ad2-9d0e-d27dc8d78541
 # ╠═b9f605c3-8f93-4c60-bf50-f81d7855d321
 # ╠═2d4212cb-350d-4c70-85d3-771ccebc4dea
 # ╠═b9c366a2-f5bc-4da7-a5a2-d0df5bf7c094
-# ╠═21b22bb6-0381-4747-867e-3958bbf7b711
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
