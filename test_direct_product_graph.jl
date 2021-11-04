@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 9a9d9db0-3768-11ec-2f64-a1750073facb
-using Graphs, MetaGraphs, GraphPlot, Colors, PlutoUI, Xtals, Test
+using Graphs, MetaGraphs, GraphPlot, Colors, PlutoUI, Xtals, Test, LinearAlgebra
 
 # ╔═╡ e4120248-f8f6-4c47-b26f-84d2cb39ef39
 md" ## Construct Molecule and test direct product graph function
@@ -17,6 +17,11 @@ struct Molecule
 	species::Vector{Symbol}
 	graph::SimpleGraph
 end
+
+# ╔═╡ 2bed0479-44ee-4b85-94e3-242339f180af
+md"
+a link to paper
+"
 
 # ╔═╡ bf37c780-55a8-41e6-92aa-0275b3486bb0
 # use the two molecule in graph kerenel survey paper
@@ -36,7 +41,7 @@ end
 # ╔═╡ 4d6aacc5-499b-4d98-b9e7-49047d250ca9
 # give the test result
 begin
-	axb = MetaGraph(8)
+	axb = SimpleGraph(8)
 	axb_edges = [(1,8), (2,3), (2,4), (2,5), (2,6), (2,7), (3,8), (4,8), (5,8), (6,8)]
 	for (i, j) in axb_edges
 		add_edge!(axb, i, j)
@@ -47,8 +52,12 @@ end
 # ╔═╡ 8dd25513-e93f-4e8f-9278-6bcc71015cb2
 begin
 	# the fastest method, store the vertex pair as a matrix
-	function direct_product_graph(graph_a::Union{SimpleGraph, MetaGraph}, species_a::Vector{Symbol}, graph_b::Union{SimpleGraph, MetaGraph}, species_b::Vector{Symbol}; verbose::Bool=false)
-		axb = MetaGraph(SimpleGraph(0))
+	function direct_product_graph(graph_a::Union{SimpleGraph, MetaGraph}, 
+		                          species_a::Vector{Symbol},
+		                          graph_b::Union{SimpleGraph, MetaGraph},
+		                          species_b::Vector{Symbol}; 
+		                          verbose::Bool=false)
+		axb = SimpleGraph(0)
 		# use a matrix to store the vertex no. from both graph_a & graph_b, Aᵢⱼ
 		ab_vertex_pair_to_axb_vertex = zeros(Int, nv(graph_a), nv(graph_b))
 		for i = 1:nv(graph_a)
@@ -68,11 +77,13 @@ begin
 			a_1, a_2 = Tuple(ed_a)
 			for ed_b in edges(graph_b)
 				b_1, b_2 = Tuple(ed_b)
+				# check if a_1&b_1, a_2&b_2 are paired
 				if ab_vertex_pair_to_axb_vertex[a_1, b_1] !== 0 &&
 					ab_vertex_pair_to_axb_vertex[a_2, b_2] !== 0
 					add_edge!(axb, ab_vertex_pair_to_axb_vertex[a_1, b_1],
 					          ab_vertex_pair_to_axb_vertex[a_2, b_2])
 				end
+				# check if a_1&b_2, a_2&b_1 are paired
 				if ab_vertex_pair_to_axb_vertex[a_1, b_2] !== 0 &&
 					ab_vertex_pair_to_axb_vertex[a_2, b_1] !== 0
 					add_edge!(axb, ab_vertex_pair_to_axb_vertex[a_1, b_2],
@@ -88,8 +99,14 @@ begin
 	end
 
 	# use the same function when we compute the dpg of two crystal
-	function direct_product_graph(crystal_a::Crystal, crystal_b::Crystal; verbose::Bool=false)
-		return direct_product_graph(crystal_a.bonds, crystal_a.atoms.species, crystal_b.bonds, crystal_b.atoms.species, verbose = verbose)
+	function direct_product_graph(crystal_a::Crystal, 
+		                          crystal_b::Crystal; 
+		                          verbose::Bool=false)
+		return direct_product_graph(crystal_a.bonds, 
+			                        crystal_a.atoms.species, 
+			                        crystal_b.bonds, 
+			                        crystal_b.atoms.species, 
+			                        verbose = verbose)
 	end
 end
 
@@ -127,8 +144,51 @@ viz_graph(xtal2)
 # ╔═╡ b9c366a2-f5bc-4da7-a5a2-d0df5bf7c094
 # test the time need
 with_terminal() do
-	@time axb = direct_product_graph(xtal1, xtal2)
+	@time x12 = direct_product_graph(xtal1, xtal2)
 end
+
+# ╔═╡ 05db5b5f-17a1-4ae4-9e12-395f0dac612f
+x12 = direct_product_graph(xtal1, xtal2)
+
+# ╔═╡ dc35efb2-a7a5-4832-8881-837a8969bd36
+md" link for survey
+"
+
+# ╔═╡ a4b4e465-2000-484d-95f8-61a0aa83e1d5
+begin
+	function grw_kernel(dpg::SimpleGraph, γ::Float64)
+		if γ >= 1 / Δ(dpg)
+			error("γ is greater than 1 / Δ(dpg)")
+		end
+		A = Matrix(adjacency_matrix(dpg))
+		B = I(size(A)[1]) - γ * A
+		invB = inv(B)
+		return sum(invB)
+	end
+	
+	function grw_kernel(crystal_a::Crystal, crystal_b::Crystal, γ::Float64)
+		dpg = direct_product_graph(crystal_a, crystal_b)
+		return grw_kernel(dpg, γ)
+	end
+
+	function grw_kernel(graph_a::Union{SimpleGraph, MetaGraph},
+	                    species_a::Vector{Symbol},
+	                    graph_b::Union{SimpleGraph, MetaGraph},
+	                    species_b::Vector{Symbol},
+	                    γ::Float64)
+		dpg = direct_product_graph(graph_a, species_a, graph_b, species_b)
+		return grw_kernel(dpg, γ)
+	end
+end
+
+# ╔═╡ f4892f18-158a-4b15-9381-27e19d5fc71c
+with_terminal() do
+	@time x12 = direct_product_graph(xtal1, xtal2)
+	@time grw_kernel(x12, 0.1)
+end
+
+# ╔═╡ daa59ad6-3c82-4434-9b43-04ef63be321e
+grw_kernel(xtal1, xtal2, 0.1)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -136,6 +196,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
 GraphPlot = "a2cc645c-3eea-5389-862e-a155d0052231"
 Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MetaGraphs = "626554b9-1ddb-594c-aa3c-2596fe9399a5"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -591,6 +652,7 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═9a9d9db0-3768-11ec-2f64-a1750073facb
 # ╟─e4120248-f8f6-4c47-b26f-84d2cb39ef39
 # ╠═d201125d-501c-4b01-a1bf-05fba7f20aee
+# ╟─2bed0479-44ee-4b85-94e3-242339f180af
 # ╠═bf37c780-55a8-41e6-92aa-0275b3486bb0
 # ╠═4d6aacc5-499b-4d98-b9e7-49047d250ca9
 # ╠═8dd25513-e93f-4e8f-9278-6bcc71015cb2
@@ -601,5 +663,10 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═b9f605c3-8f93-4c60-bf50-f81d7855d321
 # ╠═2d4212cb-350d-4c70-85d3-771ccebc4dea
 # ╠═b9c366a2-f5bc-4da7-a5a2-d0df5bf7c094
+# ╠═05db5b5f-17a1-4ae4-9e12-395f0dac612f
+# ╟─dc35efb2-a7a5-4832-8881-837a8969bd36
+# ╠═a4b4e465-2000-484d-95f8-61a0aa83e1d5
+# ╠═f4892f18-158a-4b15-9381-27e19d5fc71c
+# ╠═daa59ad6-3c82-4434-9b43-04ef63be321e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
