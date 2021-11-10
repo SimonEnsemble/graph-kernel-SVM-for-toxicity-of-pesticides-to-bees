@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.17.0
+# v0.17.1
 
 using Markdown
 using InteractiveUtils
@@ -127,6 +127,9 @@ begin
 	infer_bonds!(xtal2, true)
 end
 
+# ╔═╡ c5d2c921-a4e7-401b-8034-2d71c712ad08
+
+
 # ╔═╡ cbaf8b1d-36ef-4ad2-9d0e-d27dc8d78541
 function viz_graph(xtal::Crystal)
 	gplot(SimpleGraph(xtal.bonds),
@@ -186,9 +189,6 @@ with_terminal() do
 	@time x12 = direct_product_graph(xtal1, xtal2)
 	@time grw_kernel(x12, 0.1)
 end
-
-# ╔═╡ daa59ad6-3c82-4434-9b43-04ef63be321e
-grw_kernel(xtal1, xtal2, 0.1)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -659,6 +659,7 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═5c2331bb-c150-4605-9d52-a649d296b46b
 # ╟─3642b8f6-a169-4aef-94ab-cd3b59033a46
 # ╠═188837dc-7a81-4334-95ad-7650a2dbab80
+# ╠═c5d2c921-a4e7-401b-8034-2d71c712ad08
 # ╠═cbaf8b1d-36ef-4ad2-9d0e-d27dc8d78541
 # ╠═b9f605c3-8f93-4c60-bf50-f81d7855d321
 # ╠═2d4212cb-350d-4c70-85d3-771ccebc4dea
@@ -667,6 +668,5 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╟─dc35efb2-a7a5-4832-8881-837a8969bd36
 # ╠═a4b4e465-2000-484d-95f8-61a0aa83e1d5
 # ╠═f4892f18-158a-4b15-9381-27e19d5fc71c
-# ╠═daa59ad6-3c82-4434-9b43-04ef63be321e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
