@@ -62,8 +62,8 @@ function grw_kernel(dpg::SimpleGraph, γ::Float64)
 	if γ >= 1 / Δ(dpg)
 		error("γ is greater than 1 / Δ(dpg)")
 	end
-	A = Matrix(adjacency_matrix(dpg))
-	B = I(size(A)[1]) - γ * A
+	A_x = Matrix(adjacency_matrix(dpg))
+	B = I(size(A_x)[1]) - γ * A_x
 	invB = inv(B)
 	return sum(invB)
 end
@@ -80,6 +80,20 @@ function grw_kernel(graph_a::Union{SimpleGraph, MetaGraph},
 					γ::Float64)
 	dpg = direct_product_graph(graph_a, species_a, graph_b, species_b)
 	return grw_kernel(dpg, γ)
+end
+
+function fixed_point_rwk(A_x::Matrix, γ::Float64; ϵ::Float64=0.001)
+    # B = I - γ*A
+    # to compute Inverse B 
+    n_x = size(A_x)[1]
+    y = rand(n_x)
+    while true
+        y_old = copy(y)
+        y = ones(n_x) + γ*A_x*y
+        if norm(y - y_old) < ϵ
+            return sum(y)
+        end
+    end
 end
 
 end
