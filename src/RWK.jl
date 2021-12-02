@@ -2,7 +2,7 @@ module RWK
 
 using LinearAlgebra, Graphs, MetaGraphs, Xtals
 
-export direct_product_graph, grw_kernel
+export direct_product_graph, grw_kernel, fixed_point_rwk
 
 # the fastest method, store the vertex pair as a matrix
 function direct_product_graph(graph_a::Union{SimpleGraph, MetaGraph}, 
@@ -94,6 +94,26 @@ function fixed_point_rwk(A_x::Matrix, γ::Float64; ϵ::Float64=0.001)
             return sum(y)
         end
     end
+end
+
+function fixed_point_rwk(dpg::SimpleGraph, γ::Float64; ϵ::Float64=0.001)
+	A_x = Matrix(adjacency_matrix(dpg))
+	return fixed_point_rwk(A_x, γ, ϵ)
+end
+
+function fixed_point_rwk(graph_a::Union{SimpleGraph, MetaGraph},
+	                     species_a::Vector{Symbol},
+						 graph_b::Union{SimpleGraph, MetaGraph},
+						 species_b::Vector{Symbol},
+						 γ::Float64;
+						 ϵ::Float64=0.001)
+	dpg = direct_product_graph(graph_a, species_a, graph_b, species_b)
+	return fixed_point_rwk(dpg, γ, ϵ)
+end
+
+function fixed_point_rwk(crystal_a::Crystal, crystal_b::Crystal, γ::Float64; ϵ::Float64=0.001)
+	dpg = direct_product_graph(crystal_a, crystal_b)
+	return fixed_point_rwk(dpg, γ, ϵ)
 end
 
 end
