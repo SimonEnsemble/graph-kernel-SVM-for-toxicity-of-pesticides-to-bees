@@ -26,8 +26,10 @@ function direct_product_graph(graph_a::Union{SimpleGraph, MetaGraph},
 	end
 
 	# loop over every edge in graph a&b
-	for (a_1, a_2) in edges(graph_a)
-		for (b_1, b_2) in edges(graph_b)
+	for ed_a in edges(graph_a)
+		a_1, a_2 = Tuple(ed_a)
+		for ed_b in edges(graph_b)
+			b_1, b_2 = Tuple(ed_b)
 			# check if a_1&b_1, a_2&b_2 are paired
 			if ab_vertex_pair_to_axb_vertex[a_1, b_1] * ab_vertex_pair_to_axb_vertex[a_2, b_2] !== 0
 				add_edge!(axb, ab_vertex_pair_to_axb_vertex[a_1, b_1],
