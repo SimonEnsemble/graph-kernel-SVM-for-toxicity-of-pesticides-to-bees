@@ -110,12 +110,14 @@ function fixed_point_rwk(graph_a::Union{SimpleGraph, MetaGraph},
 						 γ::Float64;
 						 ϵ::Float64=0.001)
 	dpg = direct_product_graph(graph_a, species_a, graph_b, species_b)
-	return fixed_point_rwk(dpg, γ, ϵ)
+	A_x = Matrix(adjacency_matrix(dpg))
+	return fixed_point_rwk(A_x, γ, ϵ)
 end
 
 function fixed_point_rwk(crystal_a::Crystal, crystal_b::Crystal, γ::Float64; ϵ::Float64=0.001)
 	dpg = direct_product_graph(crystal_a, crystal_b)
-	return fixed_point_rwk(dpg, γ, ϵ)
+	A_x = Matrix(adjacency_matrix(dpg))
+	return fixed_point_rwk(A_x, γ, ϵ)
 end
 
 end
