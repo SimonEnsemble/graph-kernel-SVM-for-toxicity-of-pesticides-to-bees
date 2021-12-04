@@ -2,7 +2,7 @@ module RWK
 
 using LinearAlgebra, Graphs, MetaGraphs, Xtals
 
-export direct_product_graph, grw_kernel, fixed_point_rwk
+export direct_product_graph, grw_kernel, fixed_point_grw_kernel
 
 # the fastest method, store the vertex pair as a matrix
 function direct_product_graph(graph_a::Union{SimpleGraph, MetaGraph}, 

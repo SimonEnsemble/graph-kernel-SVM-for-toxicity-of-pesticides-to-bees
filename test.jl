@@ -34,8 +34,8 @@ end
 
 @time x12 = direct_product_graph(xtal1, xtal2)
 
-@time grw_kernel(x12, 0.1)
+# @time grw_kernel(x12, 0.1)
 
-typeof(x12)
+@time fixed_point_grw_kernel(x12, 0.1, ϵ = 0.1)
 
-@time fixed_point_rwk(x12, 0.1, ϵ = 0.0001)
+# @test isapprox(grw_kernel(x12, 0.1), fixed_point_grw_kernel(x12, 0.1, ϵ = 0.0001), atol = 0.01)
