@@ -110,8 +110,9 @@ function fixed_point_grw_kernel(graph_a::Union{SimpleGraph, MetaGraph},
 						 graph_b::Union{SimpleGraph, MetaGraph},
 						 species_b::Vector{Symbol},
 						 γ::Float64;
-						 ϵ::Float64=0.001)
-	dpg = direct_product_graph(graph_a, species_a, graph_b, species_b)
+						 ϵ::Float64=0.001,
+						 verbose::Bool=false)
+	dpg = direct_product_graph(graph_a, species_a, graph_b, species_b, verbose = verbose)
 	A_x = Matrix(adjacency_matrix(dpg))
 	return fixed_point_grw_kernel(A_x, γ, ϵ = ϵ)
 end
