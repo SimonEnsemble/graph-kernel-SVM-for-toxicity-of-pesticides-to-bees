@@ -1,6 +1,6 @@
 using RWK, Graphs, MetaGraphs, LinearAlgebra, Xtals, Distributed, JLD2, ProgressMeter
 
-cages = read_xyz.(readdir("all_cages\\normal type", join = true))
+cages = read_xyz.(readdir("all_cages/normal type", join = true))
 
 cages_bonds = [infer_bonds(cage) for cage in cages]
 
@@ -18,8 +18,9 @@ for m = 1:n_cages
 		dpg = direct_product_graph(cages_bonds[m], cages[m].species, cages_bonds[n], cages[n].species, verbose = true)
 		id_pair += 1
 		dpg_sizes[id_pair] = nv(dpg)
-		# K[m, n] = fixed_point_grw_kernel(dpg, 0.1, ϵ = 0.01, verbose = true)
-		# K[n, m] = K[m, n]
+		K[m, n] = fixed_point_grw_kernel(dpg, 0.1, ϵ = 0.01)
+		K[n, m] = K[m, n]
+		jldsave("K.jld2"; K)
 		next!(pbar)
 	end
 end
