@@ -1,4 +1,4 @@
-using RWK, Graphs, MetaGraphs, LinearAlgebra, Xtals, Distributed, JLD2, ProgressMeter, CairoMakie
+using RWK, Graphs, MetaGraphs, LinearAlgebra, Xtals, JLD2, ProgressMeter, CairoMakie
 
 cages = read_xyz.(readdir("all_cages/normal type", join = true))
 
