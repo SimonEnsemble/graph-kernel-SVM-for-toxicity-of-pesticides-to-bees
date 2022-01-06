@@ -18,5 +18,4 @@ tildeK = K - all_ones * K - K * all_ones + all_ones * K * all_ones
 
 print(λₛ)
 
-#　barplot(["λ<sub>$i</sub>" for i = 1:length(λₛ)], λₛ, title = "eigenvalues of ̃K")
-
+barplot(["λ<sub>$i</sub>" for i = 1:length(λₛ)], abs.(λₛ), title = "eigenvalues of ̃K")
