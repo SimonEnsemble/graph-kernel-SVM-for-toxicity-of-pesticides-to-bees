@@ -1,4 +1,4 @@
-using Graphs, MetaGraphs, Xtals, Test, LinearAlgebra, RWK
+using Graphs, MetaGraphs, Xtals, Test, LinearAlgebra, RWK, MolecularGraph
 
 struct Molecule
 	species::Vector{Symbol}
@@ -39,3 +39,13 @@ end
 @time fixed_point_grw_kernel(x12, 0.1, ϵ = 0.1)
 
 # @test isapprox(grw_kernel(x12, 0.1), fixed_point_grw_kernel(x12, 0.1, ϵ = 0.0001), atol = 0.01)
+
+mol_a = smilestomol("CC(Cc1ccc(C(C)(C)C)cc1)CN1CC(C)OC(C)C1")
+
+mol_b = smilestomol("COc1ccc(-c2ccccc2)cc1NNC(=O)OC(C)C")
+
+direct_product_graph(mol_a, mol_b)
+
+@time fixed_point_grw_kernel(mol_a, mol_b, 0.01)
+
+@time grw_kernel(mol_a, mol_b, 0.01)

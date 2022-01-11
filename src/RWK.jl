@@ -66,7 +66,7 @@ function direct_product_graph(molecule_a::GraphMol,
 	molecule_species_a = atomsymbol(molecule_a)
 	molecule_sepcies_b = atomsymbol(molecule_b)
 	graph_a = SimpleGraph(length(molecule_species_a))
-	graph_b = SimpleGraph(length(molecule_species_b))
+	graph_b = SimpleGraph(length(molecule_sepcies_b))
 	for (aᵢ, aⱼ) in molecule_a.edges
 		add_edge!(graph_a, aᵢ, aⱼ)
 	end
