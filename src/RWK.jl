@@ -60,8 +60,8 @@ function direct_product_graph(crystal_a::Crystal,
 								verbose = verbose)
 end
 
-function direct_product_graph(molecule_a::GeneralVectorMol,
-                              molecule_b::GeneralVectorMol;
+function direct_product_graph(molecule_a::GraphMol,
+                              molecule_b::GraphMol;
 							  verbose::Bool=false)
 	molecule_species_a = atomsymbol(molecule_a)
 	molecule_sepcies_b = atomsymbol(molecule_b)
@@ -95,7 +95,7 @@ function grw_kernel(crystal_a::Crystal, crystal_b::Crystal, γ::Float64)
 	return grw_kernel(dpg, γ)
 end
 
-function grw_kernel(molecule_a::GeneralVectorMol, molecule_b::GeneralVectorMol, γ::Float64)
+function grw_kernel(molecule_a::GraphMol, molecule_b::GraphMol, γ::Float64)
 	dpg = direct_product_graph(molecule_a, molecule_b)
 	return grw_kernel(dpg, γ)
 end
@@ -148,7 +148,7 @@ function fixed_point_grw_kernel(crystal_a::Crystal, crystal_b::Crystal, γ::Floa
 	return fixed_point_grw_kernel(A_x, γ, ϵ = ϵ)
 end
 
-function fixed_point_grw_kernel(molecule_a::GeneralVectorMol, molecule_b::GeneralVectorMol, γ::Float64; ϵ::Float64=0.001)
+function fixed_point_grw_kernel(molecule_a::GraphMol, molecule_b::GraphMol, γ::Float64; ϵ::Float64=0.001)
 	dpg = direct_product_graph(molecule_a, molecule_b)
 	A_x = Matrix(adjacency_matrix(dpg))
 	return fixed_point_grw_kernel(A_x, γ, ϵ = ϵ)
