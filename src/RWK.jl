@@ -1,6 +1,6 @@
 module RWK
 
-using LinearAlgebra, Graphs, MetaGraphs, Xtals
+using LinearAlgebra, Graphs, MetaGraphs, Xtals, MolecularGraph
 
 export direct_product_graph, grw_kernel, fixed_point_grw_kernel
 
@@ -60,6 +60,26 @@ function direct_product_graph(crystal_a::Crystal,
 								verbose = verbose)
 end
 
+function direct_product_graph(molecule_a::GeneralVectorMol,
+                              molecule_b::GeneralVectorMol;
+							  verbose::Bool=false)
+	molecule_species_a = atomsymbol(molecule_a)
+	molecule_sepcies_b = atomsymbol(molecule_b)
+	graph_a = SimpleGraph(length(molecule_species_a))
+	graph_b = SimpleGraph(length(molecule_species_b))
+	for (aᵢ, aⱼ) in molecule_a.edges
+		add_edge!(graph_a, aᵢ, aⱼ)
+	end
+	for (bᵢ, bⱼ) in molecule_b.edges
+		add_edge!(graph_b, bᵢ, bⱼ)
+	end
+	return direct_product_graph(molecule_species_a,
+                                graph_a,
+								molecule_sepcies_b,
+								graph_b,
+								verbose = verbose)
+end
+
 function grw_kernel(dpg::SimpleGraph, γ::Float64)
 	if γ >= 1 / Δ(dpg)
 		error("γ is greater than 1 / Δ(dpg)")
@@ -72,6 +92,11 @@ end
 
 function grw_kernel(crystal_a::Crystal, crystal_b::Crystal, γ::Float64)
 	dpg = direct_product_graph(crystal_a, crystal_b)
+	return grw_kernel(dpg, γ)
+end
+
+function grw_kernel(molecule_a::GeneralVectorMol, molecule_b::GeneralVectorMol, γ::Float64)
+	dpg = direct_product_graph(molecule_a, molecule_b)
 	return grw_kernel(dpg, γ)
 end
 
@@ -119,6 +144,12 @@ end
 
 function fixed_point_grw_kernel(crystal_a::Crystal, crystal_b::Crystal, γ::Float64; ϵ::Float64=0.001)
 	dpg = direct_product_graph(crystal_a, crystal_b)
+	A_x = Matrix(adjacency_matrix(dpg))
+	return fixed_point_grw_kernel(A_x, γ, ϵ = ϵ)
+end
+
+function fixed_point_grw_kernel(molecule_a::GeneralVectorMol, molecule_b::GeneralVectorMol, γ::Float64; ϵ::Float64=0.001)
+	dpg = direct_product_graph(molecule_a, molecule_b)
 	A_x = Matrix(adjacency_matrix(dpg))
 	return fixed_point_grw_kernel(A_x, γ, ϵ = ϵ)
 end
