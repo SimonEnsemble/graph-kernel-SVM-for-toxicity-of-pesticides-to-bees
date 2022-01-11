@@ -73,10 +73,10 @@ function direct_product_graph(molecule_a::GraphMol,
 	for (bᵢ, bⱼ) in molecule_b.edges
 		add_edge!(graph_b, bᵢ, bⱼ)
 	end
-	return direct_product_graph(molecule_species_a,
-                                graph_a,
-								molecule_sepcies_b,
+	return direct_product_graph(graph_a,
+                                molecule_species_a,
 								graph_b,
+								molecule_sepcies_b,
 								verbose = verbose)
 end
 
