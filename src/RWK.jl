@@ -60,24 +60,60 @@ function direct_product_graph(crystal_a::Crystal,
 								verbose = verbose)
 end
 
-function direct_product_graph(molecule_a::GraphMol,
-                              molecule_b::GraphMol;
+# for GraphMol, need to confirm if the bond has the same order
+function direct_product_graph(molecule_a::GraphMol, 
+	                          molecule_b::GraphMol; 
 							  verbose::Bool=false)
-	molecule_species_a = atomsymbol(molecule_a)
-	molecule_sepcies_b = atomsymbol(molecule_b)
-	graph_a = SimpleGraph(length(molecule_species_a))
-	graph_b = SimpleGraph(length(molecule_sepcies_b))
-	for (aᵢ, aⱼ) in molecule_a.edges
+	species_a = atomsymbol(molecule_a)
+	species_b = atomsymbol(molecule_b)
+	graph_a = SimpleGraph(length(species_a))
+	graph_b = SimpleGraph(length(species_b))
+	edge_a_bond = zeros(Int, nv(graph_a), nv(graph_a))
+	edge_b_bond = zeros(Int, nv(graph_b), nv(graph_b))
+	for (k, (aᵢ, aⱼ)) in enumerate(molecule_a.edges)
 		add_edge!(graph_a, aᵢ, aⱼ)
+		edge_a_bond[aᵢ, aⱼ] = bondorder(molecule_a)[k]
 	end
-	for (bᵢ, bⱼ) in molecule_b.edges
+	for (l, (bᵢ, bⱼ)) in enumerate(molecule_b.edges)
 		add_edge!(graph_b, bᵢ, bⱼ)
+		edge_b_bond[bᵢ, bⱼ] = bondorder(molecule_b)[l]
 	end
-	return direct_product_graph(graph_a,
-                                molecule_species_a,
-								graph_b,
-								molecule_sepcies_b,
-								verbose = verbose)
+
+	axb = SimpleGraph(0)
+	ab_vertex_pair_to_axb_vertex = zeros(Int, nv(graph_a), nv(graph_b))
+	for a = 1:nv(graph_a)
+		for b = 1:nv(graph_b)
+			if species_a[a] == species_b[b]
+				add_vertex!(axb)
+				ab_vertex_pair_to_axb_vertex[a, b] = nv(axb)
+			end
+		end
+	end
+	if verbose
+		println("# nodes in dpg: ", nv(axb))
+	end
+
+	for ed_a in edges(graph_a)
+		a_1, a_2 = Tuple(ed_a)
+		for ed_b in edges(graph_b)
+			b_1, b_2 = Tuple(ed_b)
+			if ab_vertex_pair_to_axb_vertex[a_1, b_1] * ab_vertex_pair_to_axb_vertex[a_2, b_2] !== 0 && 
+				edge_a_bond[a_1, a_2] == edge_b_bond[b_1, b_2]
+				add_edge!(axb, ab_vertex_pair_to_axb_vertex[a_1, b_1],
+				          ab_vertex_pair_to_axb_vertex[a_2, b_2])
+			end
+			if ab_vertex_pair_to_axb_vertex[a_1, b_2] * ab_vertex_pair_to_axb_vertex[a_2, b_1] !== 0 && 
+				edge_a_bond[a_1, a_2] == edge_b_bond[b_1, b_2]
+				add_edge!(axb, ab_vertex_pair_to_axb_vertex[a_1, b_2],
+				          ab_vertex_pair_to_axb_vertex[a_2, b_1])
+			end
+		end
+	end
+	if verbose
+		println("# edges in dpg: ", ne(axb))
+	end
+
+	return axb
 end
 
 function grw_kernel(dpg::SimpleGraph, γ::Float64)
@@ -131,12 +167,12 @@ function fixed_point_grw_kernel(dpg::SimpleGraph, γ::Float64; ϵ::Float64=0.001
 end
 
 function fixed_point_grw_kernel(graph_a::Union{SimpleGraph, MetaGraph},
-	                     species_a::Vector{Symbol},
-						 graph_b::Union{SimpleGraph, MetaGraph},
-						 species_b::Vector{Symbol},
-						 γ::Float64;
-						 ϵ::Float64=0.001,
-						 verbose::Bool=false)
+	                            species_a::Vector{Symbol},
+								graph_b::Union{SimpleGraph, MetaGraph},
+								species_b::Vector{Symbol},
+								γ::Float64;
+								ϵ::Float64=0.001,
+								verbose::Bool=false)
 	dpg = direct_product_graph(graph_a, species_a, graph_b, species_b, verbose = verbose)
 	A_x = Matrix(adjacency_matrix(dpg))
 	return fixed_point_grw_kernel(A_x, γ, ϵ = ϵ)
