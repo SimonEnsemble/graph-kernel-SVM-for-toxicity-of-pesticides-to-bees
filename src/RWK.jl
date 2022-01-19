@@ -1,6 +1,6 @@
 module RWK
 
-using Graphs, MetaGraphs, Xtals, MolecularGraph
+using Graphs, MetaGraphs, Xtals, MolecularGraph, LinearAlgebra
 
 export direct_product_graph, grw_kernel, fixed_point_grw_kernel
 
