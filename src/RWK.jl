@@ -1,6 +1,6 @@
 module RWK
 
-using LinearAlgebra, Graphs, MetaGraphs, Xtals, MolecularGraph
+using Graphs, MetaGraphs, Xtals, MolecularGraph
 
 export direct_product_graph, grw_kernel, fixed_point_grw_kernel
 
@@ -66,23 +66,21 @@ function direct_product_graph(molecule_a::GraphMol,
 							  verbose::Bool=false)
 	species_a = atomsymbol(molecule_a)
 	species_b = atomsymbol(molecule_b)
-	graph_a = SimpleGraph(length(species_a))
-	graph_b = SimpleGraph(length(species_b))
-	edge_a_bond = zeros(Int, nv(graph_a), nv(graph_a))
-	edge_b_bond = zeros(Int, nv(graph_b), nv(graph_b))
+	n_a = length(species_a)
+	n_b = length(species_b)
+	edge_a_bond = zeros(Int, n_a, n_a)
+	edge_b_bond = zeros(Int, n_b, n_b)
 	for (k, (aᵢ, aⱼ)) in enumerate(molecule_a.edges)
-		add_edge!(graph_a, aᵢ, aⱼ)
 		edge_a_bond[aᵢ, aⱼ] = bondorder(molecule_a)[k]
 	end
 	for (l, (bᵢ, bⱼ)) in enumerate(molecule_b.edges)
-		add_edge!(graph_b, bᵢ, bⱼ)
 		edge_b_bond[bᵢ, bⱼ] = bondorder(molecule_b)[l]
 	end
 
 	axb = SimpleGraph(0)
-	ab_vertex_pair_to_axb_vertex = zeros(Int, nv(graph_a), nv(graph_b))
-	for a = 1:nv(graph_a)
-		for b = 1:nv(graph_b)
+	ab_vertex_pair_to_axb_vertex = zeros(Int, n_a, n_b)
+	for a = 1:n_a
+		for b = 1:n_b
 			if species_a[a] == species_b[b]
 				add_vertex!(axb)
 				ab_vertex_pair_to_axb_vertex[a, b] = nv(axb)
@@ -93,9 +91,9 @@ function direct_product_graph(molecule_a::GraphMol,
 		println("# nodes in dpg: ", nv(axb))
 	end
 
-	for ed_a in edges(graph_a)
+	for ed_a in molecule_a.edges
 		a_1, a_2 = Tuple(ed_a)
-		for ed_b in edges(graph_b)
+		for ed_b in molecule_b.edges
 			b_1, b_2 = Tuple(ed_b)
 			if ab_vertex_pair_to_axb_vertex[a_1, b_1] * ab_vertex_pair_to_axb_vertex[a_2, b_2] !== 0 && 
 				edge_a_bond[a_1, a_2] == edge_b_bond[b_1, b_2]
