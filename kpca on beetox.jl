@@ -20,10 +20,11 @@ for m = 1:n_mol
 		dpg = direct_product_graph(contact_tox_mol[m], contact_tox_mol[n], verbose = true)
 		K[m, n] = fixed_point_grw_kernel(dpg, 0.1, ϵ = 0.01)
 		K[n, m] = K[m, n]
-		jldsave("BeeToxK.jld2"; K)
 		next!(pbar)
 	end
 end
+
+jldsave("BeeToxK.jld2"; K)
 
 all_ones = ones(size(K)) / size(K)[1]
 
