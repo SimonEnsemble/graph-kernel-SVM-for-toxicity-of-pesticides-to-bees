@@ -160,6 +160,9 @@ function fixed_point_grw_kernel(A_x::Matrix, γ::Float64; ϵ::Float64=0.001)
 end
 
 function fixed_point_grw_kernel(dpg::SimpleGraph, γ::Float64; ϵ::Float64=0.001)
+	if γ >= 1 / Δ(dpg)
+		error("γ is greater than 1 / Δ(dpg)")
+	end
 	A_x = Matrix(adjacency_matrix(dpg))
 	return fixed_point_grw_kernel(A_x, γ, ϵ = ϵ)
 end
@@ -172,20 +175,17 @@ function fixed_point_grw_kernel(graph_a::Union{SimpleGraph, MetaGraph},
 								ϵ::Float64=0.001,
 								verbose::Bool=false)
 	dpg = direct_product_graph(graph_a, species_a, graph_b, species_b, verbose = verbose)
-	A_x = Matrix(adjacency_matrix(dpg))
-	return fixed_point_grw_kernel(A_x, γ, ϵ = ϵ)
+	return fixed_point_grw_kernel(dpg, γ, ϵ = ϵ)
 end
 
 function fixed_point_grw_kernel(crystal_a::Crystal, crystal_b::Crystal, γ::Float64; ϵ::Float64=0.001)
 	dpg = direct_product_graph(crystal_a, crystal_b)
-	A_x = Matrix(adjacency_matrix(dpg))
-	return fixed_point_grw_kernel(A_x, γ, ϵ = ϵ)
+	return fixed_point_grw_kernel(dpg, γ, ϵ = ϵ)
 end
 
 function fixed_point_grw_kernel(molecule_a::GraphMol, molecule_b::GraphMol, γ::Float64; ϵ::Float64=0.001)
 	dpg = direct_product_graph(molecule_a, molecule_b)
-	A_x = Matrix(adjacency_matrix(dpg))
-	return fixed_point_grw_kernel(A_x, γ, ϵ = ϵ)
+	return fixed_point_grw_kernel(dpg, γ, ϵ = ϵ)
 end
 
 end
