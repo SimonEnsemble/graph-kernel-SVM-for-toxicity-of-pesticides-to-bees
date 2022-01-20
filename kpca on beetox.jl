@@ -12,13 +12,13 @@ n_jobs = Int(n_mol*(n_mol-1)/2 + n_mol)
 
 pbar = Progress(n_jobs, 1)
 
-id_pair = 0
 K = zeros(n_mol, n_mol)
+γ = 0.01
 for m = 1:n_mol
 	for n = m:n_mol
 		# compute grw_kernel between every two different cages
-		dpg = direct_product_graph(contact_tox_mol[m], contact_tox_mol[n], verbose = true)
-		K[m, n] = fixed_point_grw_kernel(dpg, 0.1, ϵ = 0.01)
+		dpg = direct_product_graph(contact_tox_mol[m], contact_tox_mol[n], verbose = false)
+		K[m, n] = grw_kernel(dpg, γ)
 		K[n, m] = K[m, n]
 		next!(pbar)
 	end
