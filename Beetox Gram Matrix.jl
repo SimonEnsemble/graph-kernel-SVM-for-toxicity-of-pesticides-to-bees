@@ -1,4 +1,4 @@
-using RWK, LinearAlgebra, JLD2, ProgressMeter, UnicodePlots, MolecularGraph, CSV, DataFrames
+using RWK, LinearAlgebra, JLD2, ProgressMeter, MolecularGraph, CSV, DataFrames
 
 # load BeeToxAI dataset
 
@@ -24,12 +24,10 @@ for m = 1:n_mol
 	end
 end
 
-jldsave("BeeToxK.jld2"; K)
+N = size(K)[1]
 
-all_ones = ones(size(K)) / size(K)[1]
+C = I(N) - 1/N * ones(N, N)
 
-tildeK = K - all_ones * K - K * all_ones + all_ones * K * all_ones
+Kcenter = C*K*C
 
-λₛ, Qₛ = eigen(tildeK)
-
-barplot(["λ$i" for i = 1:length(λₛ)], abs.(λₛ), title = "eigenvalues of ̃K")
+jldsave("BeeToxK.jld2"; Kcenter)
