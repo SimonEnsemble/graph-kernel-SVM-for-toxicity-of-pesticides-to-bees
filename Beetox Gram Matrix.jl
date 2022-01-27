@@ -4,7 +4,13 @@ using RWK, LinearAlgebra, JLD2, ProgressMeter, MolecularGraph, CSV, DataFrames
 
 df_contact = CSV.read("new_smiles.csv", DataFrame)
 
-contact_tox_mol = [addhydrogens(smilestomol(smiles)) for smiles in df_contact[:, "SMILES"]]
+contact_tox_mol = [smilestomol(smiles) for smiles in df_contact[:, "SMILES"]]
+
+addhydrogens_flag = true
+
+if addhydrogens_flag
+	contact_tox_mol = addhydrogens.(contact_tox_mol)
+end
 
 n_mol = length(contact_tox_mol)
 
@@ -30,4 +36,8 @@ C = I(N) - 1/N * ones(N, N)
 
 Kcenter = C*K*C
 
-jldsave("BeeToxK.jld2"; Kcenter)
+if addhydrogens_flag
+	jldsave("BeeToxKwh.jld2"; Kcenter)
+else
+	jldsave("BeeToxK.jld2"; Kcenter)
+end

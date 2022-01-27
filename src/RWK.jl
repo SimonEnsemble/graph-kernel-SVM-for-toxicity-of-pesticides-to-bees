@@ -73,8 +73,8 @@ function direct_product_graph(molecule_a::GraphMol,
 	for (k, (aᵢ, aⱼ)) in enumerate(molecule_a.edges)
 		edge_a_bond[aᵢ, aⱼ] = bondorder(molecule_a)[k]
 	end
-	for (l, (bᵢ, bⱼ)) in enumerate(molecule_b.edges)
-		edge_b_bond[bᵢ, bⱼ] = bondorder(molecule_b)[l]
+	for (k, (bᵢ, bⱼ)) in enumerate(molecule_b.edges)
+		edge_b_bond[bᵢ, bⱼ] = bondorder(molecule_b)[k]
 	end
 
 	axb = SimpleGraph(0)
