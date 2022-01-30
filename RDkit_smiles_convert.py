@@ -1,5 +1,4 @@
 from rdkit import Chem
-
 from pandas import pandas
 
 df = pandas.read_csv("BeeToxAI Data/File S1 Acute contact toxicity dataset for classification.csv")
@@ -10,5 +9,6 @@ for smile in df["SMILES"]:
     new_smile = Chem.MolToSmiles(m, kekuleSmiles = True)
     new_smiles.append(new_smile)
 
+df = df.rename(columns={"SMILES": "old_SMILES"})
 df["SMILES"] = new_smiles
-df.to_csv("new_smiles.csv", encoding = 'utf-8', index = False)
+df.to_csv("new_smiles.csv", encoding='utf-8', index=False)
