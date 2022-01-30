@@ -1,6 +1,6 @@
 module RWK
 
-using Graphs, MolecularGraph, LinearAlgebra
+using Graphs, MolecularGraph, LinearAlgebra, MetaGraphs
 
 export direct_product_graph, grw_kernel, fixed_point_grw_kernel
 
@@ -19,13 +19,14 @@ function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=fa
         ab_vertex_pair_to_axb_vertex stores the mapping from
            (a, b) -> v
     =#
-    axb = SimpleGraph(0)
+    axb = MetaGraph(SimpleGraph(0))
     ab_vertex_pair_to_axb_vertex = zeros(Int, n_a, n_b)
     for a = 1:n_a
         for b = 1:n_b
             if vertex_labels_a[a] == vertex_labels_b[b]
                 add_vertex!(axb)
                 ab_vertex_pair_to_axb_vertex[a, b] = nv(axb)
+                set_props!(axb, nv(axb), Dict(:vertex_pair => (a, b)))
             end
         end
     end
@@ -74,7 +75,7 @@ function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=fa
     return axb
 end
 
-function grw_kernel(dpg::SimpleGraph, γ::Float64)
+function grw_kernel(dpg::MetaGraph, γ::Float64)
     if γ >= 1 / Δ(dpg)
         error("γ is greater than 1 / Δ(dpg)")
     end
