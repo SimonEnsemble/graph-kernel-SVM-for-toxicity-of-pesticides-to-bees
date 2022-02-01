@@ -5,13 +5,33 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 985381fb-0f41-446a-869d-2ad8736b9403
-using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, UMAP, ColorSchemes, ScikitLearn
+using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, UMAP, ColorSchemes, ScikitLearn, MolecularGraph
 
 # ╔═╡ 7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
 using ScikitLearn.CrossValidation: train_test_split
 
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 md"k-PCA on beetox data"
+
+# ╔═╡ 20fc87e4-c1ee-468c-ba2c-1dd65606df34
+γ = 0.01 # parameter in random walk graph kernel
+
+# ╔═╡ f8679dae-8322-4f3d-986b-8d857c29ff2d
+add_hydrogens = false
+
+# ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
+begin
+	# load data from compute_Gram_matrix.jl
+	jldfilename = "centered_BeeTox_Gram_matrix_γ_$γ"
+	if add_hydrogens
+        jldfilename *= "w_Hs"
+    end
+    jldfilename *= ".jld2"
+
+	mols     = load(jldfilename, "mols")
+	toxicity = load(jldfilename, "toxicity")
+	K        = load(jldfilename, "Kcentered")
+end
 
 # ╔═╡ efd8a5de-82f4-4255-9982-ff866937261f
 begin
@@ -20,19 +40,8 @@ begin
 end
 
 # ╔═╡ 5b256141-1995-40bb-9d7b-60fafcec6c90
-colors = Dict("Toxic" => ColorSchemes.Dark2_3[1], 
+colors = Dict("Toxic"    => ColorSchemes.Dark2_3[1], 
 	          "Nontoxic" => ColorSchemes.Dark2_3[2])
-
-# ╔═╡ 9adcf836-52d0-4a0f-b620-c58eb85f774b
-begin
-	# load Gram matrix
-	addhydrogens_flag = false
-	if addhydrogens_flag
-	    K = load("BeeToxKwh.jld2")["Kcenter"]
-	else
-	    K = load("BeeToxK.jld2")["Kcenter"]
-	end
-end
 
 # ╔═╡ cdb19544-f3eb-4845-99de-9a2fcc49ed4b
 begin
@@ -41,10 +50,6 @@ begin
 	λ = reverse(λ) # sort lowest to highest eigenvalues
 	V = reverse(V, dims=2)
 end
-
-# ╔═╡ d0e2bae2-4216-461c-b4b0-cab9d40a947b
-# import labels
-toxicity = CSV.read("new_smiles.csv", DataFrame)[:, "Outcome"]
 
 # ╔═╡ 1f8030f3-a100-41de-a0f0-2edc4b198bfa
 # dimension of latent space
@@ -58,6 +63,7 @@ begin
 end
 
 # ╔═╡ 29709f83-c2bf-4087-b9f1-5dfc357ddad5
+# UMAP
 if L > 2
     embedding = umap(Z, 2, n_neighbors=10)
 elseif L == 2
@@ -66,10 +72,16 @@ end
 
 # ╔═╡ 62afcd46-e716-401f-ab39-21758dc5cca6
 begin
-	# show distribution of eigenvalues
+	# show distribution of eigenvalues. 
 	f = Figure()
-	Axis(f[1,1])
-	barplot!(1:length(λ), λ)
+	Axis(f[1,1], xlabel="index", ylabel="eigenvalue of K", title="scree plot")
+	barplot!(1:L, λ[1:L], 
+		color=ColorSchemes.Pastel2_3[1], label="keep")
+	barplot!((L+1):length(λ), λ[(L+1):end], 
+		color=ColorSchemes.Pastel2_3[2], label="discard")
+	axislegend()
+	# xlims!(0, nothing)
+	# ylims!(0, nothing)
 	save("eigenvalues.pdf", f)
 	f
 end
@@ -77,7 +89,12 @@ end
 # ╔═╡ 4e38c47d-2053-477d-8ce5-8dbfbed9bcc2
 begin
 	f1 = Figure()
-	Axis(f1[1,1])
+	Axis(f1[1, 1], 
+		xlabel="UMAP dim. 1", 
+		ylabel="UMAP dim. 2", 
+		aspect=DataAspect(),
+		title="latent space of pesticides"
+	)
 	for l in ["Toxic", "Nontoxic"]
 	    scatter!(embedding[1, toxicity .== l], embedding[2, toxicity .== l], 
 			label=l, strokewidth=2, color=(:white, 0.0), strokecolor=colors[l])
@@ -117,6 +134,8 @@ CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+MolecularGraph = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
 ScikitLearn = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
 UMAP = "c4f8c510-2410-5be4-91d7-4fbaeb39457e"
 
@@ -126,6 +145,7 @@ CairoMakie = "~0.7.2"
 ColorSchemes = "~3.16.0"
 DataFrames = "~1.3.2"
 JLD2 = "~0.4.19"
+MolecularGraph = "~0.11.0"
 ScikitLearn = "~0.6.4"
 UMAP = "~0.1.9"
 """
@@ -134,9 +154,8 @@ UMAP = "~0.1.9"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.0-DEV.1390"
+julia_version = "1.7.1"
 manifest_format = "2.0"
-project_hash = "bc12dc41166f8aa285dbf97ba689964ff079fdd3"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -163,7 +182,6 @@ version = "0.4.1"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
-version = "1.1.1"
 
 [[deps.ArnoldiMethod]]
 deps = ["LinearAlgebra", "Random", "StaticArrays"]
@@ -173,15 +191,15 @@ version = "0.1.0"
 
 [[deps.Arpack]]
 deps = ["Arpack_jll", "Libdl", "LinearAlgebra", "Logging"]
-git-tree-sha1 = "91ca22c4b8437da89b030f08d71db55a379ce958"
+git-tree-sha1 = "288d58589d4249a63095f3f41ece91bf34c32c19"
 uuid = "7d9fca2a-8960-54d3-9f78-7d1dccf2cb97"
-version = "0.5.3"
+version = "0.5.0"
 
 [[deps.Arpack_jll]]
-deps = ["Libdl", "OpenBLAS_jll", "Pkg"]
-git-tree-sha1 = "e214a9b9bd1b4e1b4f15b22c0994862b66af7ff7"
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "OpenBLAS_jll", "Pkg"]
+git-tree-sha1 = "4c31b0101997beb213a9e6c39116b052e73ca38c"
 uuid = "68821587-b530-5797-8361-c406ea357684"
-version = "3.5.0+3"
+version = "3.8.0+0"
 
 [[deps.ArrayInterface]]
 deps = ["Compat", "IfElse", "LinearAlgebra", "Requires", "SparseArrays", "Static"]
@@ -305,7 +323,6 @@ version = "3.41.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "0.5.0+0"
 
 [[deps.Conda]]
 deps = ["Downloads", "JSON", "VersionParsing"]
@@ -384,9 +401,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.Distributions]]
 deps = ["ChainRulesCore", "DensityInterface", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Test"]
-git-tree-sha1 = "38bcc22b6e358e88a7715ad0db446dfd3a4fea47"
+git-tree-sha1 = "c6dd4a56078a7760c04b882d9d94a08a4669598d"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.43"
+version = "0.25.44"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -395,9 +412,8 @@ uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.8.6"
 
 [[deps.Downloads]]
-deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
+deps = ["ArgTools", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
-version = "1.6.0"
 
 [[deps.EarCut_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -452,9 +468,6 @@ deps = ["Compat", "Dates", "Mmap", "Printf", "Test", "UUIDs"]
 git-tree-sha1 = "04d13bfa8ef11720c24e4d840c0033d145537df7"
 uuid = "48062228-2e41-5def-b9a4-89aafe57970f"
 version = "0.9.17"
-
-[[deps.FileWatching]]
-uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -705,15 +718,19 @@ version = "1.3.0"
 deps = ["Artifacts", "Pkg"]
 uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 
+[[deps.LazyJSON]]
+deps = ["JSON", "OrderedCollections", "PropertyDicts"]
+git-tree-sha1 = "ce08411caa70e0c9e780f142f59debd89a971738"
+uuid = "fc18253b-5e1b-504c-a4a2-9ece4944c004"
+version = "0.2.2"
+
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
-version = "0.6.3"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "7.73.0+4"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -722,7 +739,6 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.9.1+2"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -835,7 +851,6 @@ version = "0.2.1"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.24.0+2"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -846,6 +861,12 @@ version = "1.0.2"
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
+[[deps.MolecularGraph]]
+deps = ["DelimitedFiles", "JSON", "LinearAlgebra", "Printf", "Requires", "Statistics", "Unmarshal", "YAML", "coordgenlibs_jll", "libinchi_jll"]
+git-tree-sha1 = "2c4173d918e302011361852864923f9bc2fb6b4c"
+uuid = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
+version = "0.11.0"
+
 [[deps.MosaicViews]]
 deps = ["MappedArrays", "OffsetArrays", "PaddedViews", "StackViews"]
 git-tree-sha1 = "b34e3bc3ca7c94914418637cb10cc4d1d80d877d"
@@ -854,7 +875,6 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2020.7.22"
 
 [[deps.NLSolversBase]]
 deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
@@ -881,7 +901,11 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
-version = "1.2.0"
+
+[[deps.Nullables]]
+git-tree-sha1 = "8f87854cc8f3685a60689d8edecaa29d2251979b"
+uuid = "4d1e1d77-625e-5b40-9113-a560ec7a8ecd"
+version = "1.0.0"
 
 [[deps.Observables]]
 git-tree-sha1 = "fe29afdef3d0c4a8286128d4e45cc50621b1e43d"
@@ -903,7 +927,6 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.17+2"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -920,7 +943,6 @@ version = "3.1.1+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1008,7 +1030,6 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -1054,6 +1075,11 @@ deps = ["Distributed", "Printf"]
 git-tree-sha1 = "afadeba63d90ff223a6a48d2009434ecee2ec9e8"
 uuid = "92933f4c-e287-5a05-a399-4b506db050ca"
 version = "1.7.1"
+
+[[deps.PropertyDicts]]
+git-tree-sha1 = "429d887daee312e73842cabe6b122e310b72e25d"
+uuid = "f8a19df8-e894-5f55-a973-672c1158cbca"
+version = "0.1.0"
 
 [[deps.PyCall]]
 deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
@@ -1118,7 +1144,6 @@ version = "0.3.0+0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
-version = "0.7.0"
 
 [[deps.SIMD]]
 git-tree-sha1 = "39e3df417a0dd0c4e1f89891a281f82f5373ea3b"
@@ -1244,6 +1269,12 @@ git-tree-sha1 = "f35e1879a71cca95f4826a14cdbf0b9e253ed918"
 uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
 version = "0.9.15"
 
+[[deps.StringEncodings]]
+deps = ["Libiconv_jll"]
+git-tree-sha1 = "50ccd5ddb00d19392577902f0079267a72c5ab04"
+uuid = "69024149-9ee7-55f6-a4c4-859efe599b68"
+version = "0.3.5"
+
 [[deps.StructArrays]]
 deps = ["Adapt", "DataAPI", "StaticArrays", "Tables"]
 git-tree-sha1 = "d21f2c564b21a202f4677c0fba5b5ee431058544"
@@ -1257,7 +1288,6 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
-version = "1.0.0"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
@@ -1274,7 +1304,6 @@ version = "1.6.1"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1321,6 +1350,12 @@ deps = ["REPL"]
 git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
 uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
 version = "0.4.1"
+
+[[deps.Unmarshal]]
+deps = ["JSON", "LazyJSON", "Missings", "Nullables", "Requires"]
+git-tree-sha1 = "ee46863309f8f942249e1df1b74ba3088ff0f151"
+uuid = "cbff2730-442d-58d7-89d1-8e530c41eb02"
+version = "0.4.4"
 
 [[deps.VersionParsing]]
 git-tree-sha1 = "58d6e80b4ee071f5efd07fda82cb9fbe17200868"
@@ -1399,10 +1434,21 @@ git-tree-sha1 = "79c31e7844f6ecf779705fbc12146eb190b7d845"
 uuid = "c5fb5394-a638-5e4d-96e5-b29de1b5cf10"
 version = "1.4.0+3"
 
+[[deps.YAML]]
+deps = ["Base64", "Dates", "Printf", "StringEncodings"]
+git-tree-sha1 = "3c6e8b9f5cdaaa21340f841653942e1a6b6561e5"
+uuid = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
+version = "0.4.7"
+
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-version = "1.2.12+1"
+
+[[deps.coordgenlibs_jll]]
+deps = ["Libdl", "Pkg"]
+git-tree-sha1 = "95b76590b9a558b69566b59cc64415b29618113b"
+uuid = "f6050b86-aaaf-512f-8549-0afff1b4d57f"
+version = "1.4.0+0"
 
 [[deps.isoband_jll]]
 deps = ["Libdl", "Pkg"]
@@ -1419,13 +1465,18 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "4.0.0+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "daacc84a041563f965be61859a36e17c4e4fcd55"
 uuid = "f638f0a6-7fb0-5443-88ba-1cc74229b280"
 version = "2.0.2+0"
+
+[[deps.libinchi_jll]]
+deps = ["Libdl", "Pkg"]
+git-tree-sha1 = "63e5bdbfc6fd1b4a14dda769dfad40a2e78baaeb"
+uuid = "172afb32-8f1c-513b-968f-184fcd77af72"
+version = "1.5.0+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
@@ -1448,12 +1499,10 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.41.0+1"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "16.2.1+1"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1471,13 +1520,14 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╟─a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 # ╠═985381fb-0f41-446a-869d-2ad8736b9403
+# ╠═20fc87e4-c1ee-468c-ba2c-1dd65606df34
+# ╠═f8679dae-8322-4f3d-986b-8d857c29ff2d
+# ╠═008f0df9-5cdb-449d-a837-3d808536d30a
 # ╠═7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
 # ╠═efd8a5de-82f4-4255-9982-ff866937261f
 # ╠═5b256141-1995-40bb-9d7b-60fafcec6c90
-# ╠═9adcf836-52d0-4a0f-b620-c58eb85f774b
-# ╠═6f2efe6a-1d89-44d4-97df-5dbef934308a
 # ╠═cdb19544-f3eb-4845-99de-9a2fcc49ed4b
-# ╠═d0e2bae2-4216-461c-b4b0-cab9d40a947b
+# ╠═6f2efe6a-1d89-44d4-97df-5dbef934308a
 # ╠═1f8030f3-a100-41de-a0f0-2edc4b198bfa
 # ╠═29709f83-c2bf-4087-b9f1-5dfc357ddad5
 # ╠═62afcd46-e716-401f-ab39-21758dc5cca6
