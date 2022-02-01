@@ -3,7 +3,7 @@ using RWK, JLD2, MolecularGraph, CSV, DataFrames
 
 # settings
 addhydrogens_flag = false
-γs = [0.0001, 0.001, 0.01]
+γs = [0.001, 0.01]
 
 # load BeeToxAI dataset
 data = CSV.read("new_smiles.csv", DataFrame)
