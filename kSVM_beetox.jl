@@ -7,6 +7,9 @@ using InteractiveUtils
 # ╔═╡ 985381fb-0f41-446a-869d-2ad8736b9403
 using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, UMAP, ColorSchemes, ScikitLearn, MolecularGraph
 
+# ╔═╡ 7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
+using ScikitLearn.CrossValidation: train_test_split
+
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 md"k-PCA on beetox data"
 
@@ -31,6 +34,12 @@ begin
 	mols     = load(jldfilename, "mols")
 	toxicity = load(jldfilename, "toxicity")
 	K        = load(jldfilename, "Kcentered")
+end
+
+# ╔═╡ efd8a5de-82f4-4255-9982-ff866937261f
+begin
+	@sk_import svm : SVC
+	@sk_import metrics: confusion_matrix
 end
 
 # ╔═╡ 5b256141-1995-40bb-9d7b-60fafcec6c90
@@ -104,6 +113,28 @@ begin
 	save("embedding.pdf", f1)
 	f1
 end
+
+# ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
+y = map(t -> t == "Toxic" ? 1 : 0, toxicity)
+
+# ╔═╡ ac3d808c-bee7-46e8-b84e-b34a409a698a
+Z
+
+# ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
+ids_train, ids_test = train_test_split(1:length(y), test_size=0.2)
+
+# ╔═╡ a1849686-ad4c-4f75-9710-53fc3296e781
+begin
+	svc = SVC(kernel="precomputed")
+	svc.fit(K[ids_train, ids_train], y[ids_train])
+	svc.score(K[ids_test, ids_train], y[ids_test])
+end
+
+# ╔═╡ b9f49c8a-7cdd-4f8b-bd02-6f620325e281
+y_pred = svc.predict(K[ids_test, ids_train])
+
+# ╔═╡ 7fafe68f-d605-44b1-95f7-7086ccda83a2
+confusion_matrix(y[ids_test], y_pred)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1503,6 +1534,8 @@ version = "3.5.0+0"
 # ╠═20fc87e4-c1ee-468c-ba2c-1dd65606df34
 # ╠═f8679dae-8322-4f3d-986b-8d857c29ff2d
 # ╠═008f0df9-5cdb-449d-a837-3d808536d30a
+# ╠═7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
+# ╠═efd8a5de-82f4-4255-9982-ff866937261f
 # ╠═5b256141-1995-40bb-9d7b-60fafcec6c90
 # ╠═22a66b19-9a1a-4c24-8aa8-0689a10d1f67
 # ╠═cdb19544-f3eb-4845-99de-9a2fcc49ed4b
@@ -1511,5 +1544,11 @@ version = "3.5.0+0"
 # ╠═29709f83-c2bf-4087-b9f1-5dfc357ddad5
 # ╠═62afcd46-e716-401f-ab39-21758dc5cca6
 # ╠═4e38c47d-2053-477d-8ce5-8dbfbed9bcc2
+# ╠═119ffdca-7f51-4e71-b825-843da6a75413
+# ╠═ac3d808c-bee7-46e8-b84e-b34a409a698a
+# ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
+# ╠═a1849686-ad4c-4f75-9710-53fc3296e781
+# ╠═b9f49c8a-7cdd-4f8b-bd02-6f620325e281
+# ╠═7fafe68f-d605-44b1-95f7-7086ccda83a2
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
