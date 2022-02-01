@@ -30,6 +30,7 @@ begin
         jldfilename *= "w_Hs"
     end
     jldfilename *= ".jld2"
+	@warn "K matrix centered on all data; need to change this."
 
 	mols     = load(jldfilename, "mols")
 	toxicity = load(jldfilename, "toxicity")
@@ -51,77 +52,14 @@ markers = Dict("Toxic"    => :x,
 	           "Nontoxic" => :circle
 )
 
-# ╔═╡ cdb19544-f3eb-4845-99de-9a2fcc49ed4b
-begin
-	# eigen-decomposition of the Gram matrix
-	λ, V = eigen(K)
-	λ = reverse(λ) # sort lowest to highest eigenvalues
-	V = reverse(V, dims=2)
-end
-
-# ╔═╡ 1f8030f3-a100-41de-a0f0-2edc4b198bfa
-# dimension of latent space
-L = findfirst(sqrt.([sum(λ[1:i])/sum(λ) for i = 1:length(λ)]) .> 0.99)
-
-# ╔═╡ 6f2efe6a-1d89-44d4-97df-5dbef934308a
-begin
-	# construct latent representations
-	V_L = V[:, 1:L]
-	Z = sqrt.(diagm(λ[1:L])) * transpose(V_L)
-end
-
-# ╔═╡ 29709f83-c2bf-4087-b9f1-5dfc357ddad5
-# UMAP
-if L > 2
-    embedding = umap(Z, 2, n_neighbors=10)
-elseif L == 2
-    embedding = Z
-end
-
-# ╔═╡ 62afcd46-e716-401f-ab39-21758dc5cca6
-begin
-	# show distribution of eigenvalues. 
-	f = Figure()
-	Axis(f[1,1], xlabel="index", ylabel="eigenvalue of K", title="scree plot")
-	barplot!(1:L, λ[1:L], 
-		color=ColorSchemes.Pastel2_3[1], label="keep")
-	barplot!((L+1):length(λ), λ[(L+1):end], 
-		color=ColorSchemes.Pastel2_3[2], label="discard")
-	axislegend()
-	# xlims!(0, nothing)
-	# ylims!(0, nothing)
-	save("eigenvalues.pdf", f)
-	f
-end
-
-# ╔═╡ 4e38c47d-2053-477d-8ce5-8dbfbed9bcc2
-begin
-	f1 = Figure()
-	Axis(f1[1, 1], 
-		xlabel="UMAP dim. 1", 
-		ylabel="UMAP dim. 2", 
-		aspect=DataAspect(),
-		title="latent space of pesticides"
-	)
-	for l in ["Toxic", "Nontoxic"]
-	    scatter!(embedding[1, toxicity .== l], embedding[2, toxicity .== l], 
-			label=l, strokewidth=2, color=(:white, 0.0), strokecolor=colors[l],
-			marker=markers[l]
-		)
-	end
-	axislegend()
-	save("embedding.pdf", f1)
-	f1
-end
-
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
 y = map(t -> t == "Toxic" ? 1 : 0, toxicity)
 
-# ╔═╡ ac3d808c-bee7-46e8-b84e-b34a409a698a
-Z
-
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 ids_train, ids_test = train_test_split(1:length(y), test_size=0.2)
+
+# ╔═╡ 84fb2634-7698-4629-8df4-a9928abef658
+@info "TODO: k-folds cross-validation to optimize γ"
 
 # ╔═╡ a1849686-ad4c-4f75-9710-53fc3296e781
 begin
@@ -133,8 +71,31 @@ end
 # ╔═╡ b9f49c8a-7cdd-4f8b-bd02-6f620325e281
 y_pred = svc.predict(K[ids_test, ids_train])
 
+# ╔═╡ 8d2dd082-b587-4bcc-9b5a-cf38375927ba
+function viz_confusion_matrix(cm::Matrix{Int64}, class_list::Vector{String})
+    fig = Figure()
+    ax = Axis(fig[1, 1],
+              xticks=([1, 2], class_list),
+              yticks=([1, 2], class_list),
+              ylabel="truth",
+              xlabel="prediction"
+    )
+    hm = heatmap!(cm, colormap=ColorSchemes.algae, colorrange=(0, sum(cm)))
+    for i = 1:2
+        for j = 1:2
+            text!("$(cm[i, j])",
+                  position=(i, j), align=(:center, :center), color=:black)
+        end
+    end
+    Colorbar(fig[1, 2], hm, label="# molecules")
+    fig
+end
+
 # ╔═╡ 7fafe68f-d605-44b1-95f7-7086ccda83a2
-confusion_matrix(y[ids_test], y_pred)
+cm = confusion_matrix(y[ids_test], y_pred)
+
+# ╔═╡ 4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
+viz_confusion_matrix(cm, ["non-toxic", "toxic"])
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1538,17 +1499,13 @@ version = "3.5.0+0"
 # ╠═efd8a5de-82f4-4255-9982-ff866937261f
 # ╠═5b256141-1995-40bb-9d7b-60fafcec6c90
 # ╠═22a66b19-9a1a-4c24-8aa8-0689a10d1f67
-# ╠═cdb19544-f3eb-4845-99de-9a2fcc49ed4b
-# ╠═6f2efe6a-1d89-44d4-97df-5dbef934308a
-# ╠═1f8030f3-a100-41de-a0f0-2edc4b198bfa
-# ╠═29709f83-c2bf-4087-b9f1-5dfc357ddad5
-# ╠═62afcd46-e716-401f-ab39-21758dc5cca6
-# ╠═4e38c47d-2053-477d-8ce5-8dbfbed9bcc2
 # ╠═119ffdca-7f51-4e71-b825-843da6a75413
-# ╠═ac3d808c-bee7-46e8-b84e-b34a409a698a
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
+# ╠═84fb2634-7698-4629-8df4-a9928abef658
 # ╠═a1849686-ad4c-4f75-9710-53fc3296e781
 # ╠═b9f49c8a-7cdd-4f8b-bd02-6f620325e281
+# ╠═8d2dd082-b587-4bcc-9b5a-cf38375927ba
 # ╠═7fafe68f-d605-44b1-95f7-7086ccda83a2
+# ╠═4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
