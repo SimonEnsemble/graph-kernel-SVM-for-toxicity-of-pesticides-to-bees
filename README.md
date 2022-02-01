@@ -1,13 +1,5 @@
-# graph-kernel-PCA-of-materials
+# graph kernel applied to beetox data set
 
-## Direct Product Kernel
+* run `RDkit_smiles_convert.py` (requires installation of RDKit)
+* run `compute_Gram_matrices.jl`
 
-function to implement direct product graph on two labeled graph
-
-function dpg_kernel
-
-## Random Walk Kernel
-
-## Fixed Point Iterations
-
-## KPCA

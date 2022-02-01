@@ -1,8 +1,8 @@
 module RWK
 
-using Graphs, MolecularGraph, LinearAlgebra, MetaGraphs
+using Graphs, MolecularGraph, LinearAlgebra, MetaGraphs, ProgressMeter
 
-export direct_product_graph, grw_kernel, fixed_point_grw_kernel
+export direct_product_graph, grw_kernel, fixed_point_grw_kernel, compute_Gram_matrix, centered_Gram_matrix
 
 # for GraphMol, need to confirm if the bond has the same order
 function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=false)
@@ -116,6 +116,35 @@ end
 function fixed_point_grw_kernel(molecule_a::GraphMol, molecule_b::GraphMol, γ::Float64; ϵ::Float64=0.001)
     dpg = direct_product_graph(molecule_a, molecule_b)
     return fixed_point_grw_kernel(dpg, γ, ϵ = ϵ)
+end
+
+function compute_Gram_matrix(mols::Vector{GraphMol{SmilesAtom, SmilesBond}}, γ::Float64;
+                            verbose::Bool=false)
+    n_mol = length(mols) # number of molecules
+    
+    # for progress bar
+    n_jobs = Int(n_mol * (n_mol - 1) / 2 + n_mol)
+    pbar = Progress(n_jobs, 1)
+
+    K = zeros(n_mol, n_mol) # Gram matrix
+    for m = 1:n_mol
+        for n = m:n_mol
+            dpg = direct_product_graph(mols[m], mols[n], verbose=verbose)
+
+            K[m, n] = grw_kernel(dpg, γ)
+            K[n, m] = K[m, n]
+
+            next!(pbar)
+        end
+    end
+
+    return K
+end
+
+function centered_Gram_matrix(K::Matrix{Float64})
+    n_mol = size(K)[1]
+    C = I(n_mol) - 1 / n_mol * ones(n_mol, n_mol) # centering matrix
+    return C * K * C
 end
 
 end
