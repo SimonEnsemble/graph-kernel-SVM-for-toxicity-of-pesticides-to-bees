@@ -3,7 +3,7 @@ using RWK, JLD2, MolecularGraph, CSV, DataFrames
 
 # settings
 addhydrogens_flag = false
-γs = [0.001, 0.01]
+γs = [0.01]
 
 # load BeeToxAI dataset
 data = CSV.read("new_smiles.csv", DataFrame)
@@ -25,6 +25,5 @@ for γ in γs
     end
     savename *= ".jld2"
 
-	jldsave("uncentered_" * savename; K, mols, toxicity)
-	jldsave("centered_" * savename; Kcentered, mols, toxicity)
+	jldsave(savename; K, Kcentered, mols, toxicity)
 end
