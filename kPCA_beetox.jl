@@ -22,15 +22,16 @@ add_hydrogens = false
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
 begin
 	# load data from compute_Gram_matrix.jl
-	jldfilename = "centered_BeeTox_Gram_matrix_γ_$γ"
+	jldfilename = "BeeTox_Gram_matrix_γ_$γ"
 	if add_hydrogens
         jldfilename *= "w_Hs"
     end
     jldfilename *= ".jld2"
 
-	mols     = load(jldfilename, "mols")
-	toxicity = load(jldfilename, "toxicity")
-	K        = load(jldfilename, "Kcentered")
+	mols      = load(jldfilename, "mols")
+	toxicity  = load(jldfilename, "toxicity")
+	Kcentered = load(jldfilename, "Kcentered")
+	K         = load(jldfilename, "K")
 end
 
 # ╔═╡ 5b256141-1995-40bb-9d7b-60fafcec6c90
@@ -45,7 +46,7 @@ markers = Dict("Toxic"    => :x,
 # ╔═╡ cdb19544-f3eb-4845-99de-9a2fcc49ed4b
 begin
 	# eigen-decomposition of the Gram matrix
-	λ, V = eigen(K)
+	λ, V = eigen(Kcentered)
 	λ = reverse(λ) # sort lowest to highest eigenvalues
 	V = reverse(V, dims=2)
 end
@@ -85,9 +86,6 @@ begin
 	f
 end
 
-# ╔═╡ ea3b198f-d184-4209-867d-00ec229d8299
-nb_atoms = [length(atomsymbol(mol)) for mol in mols]
-
 # ╔═╡ 4e38c47d-2053-477d-8ce5-8dbfbed9bcc2
 begin
 	f1 = Figure()
@@ -108,6 +106,9 @@ begin
 	f1
 end
 
+# ╔═╡ ea3b198f-d184-4209-867d-00ec229d8299
+nb_atoms = [length(atomsymbol(mol)) for mol in mols]
+
 # ╔═╡ b396b0b8-607b-46f5-9ab2-60d37ae13c71
 begin
 	f2 = Figure()
@@ -120,6 +121,49 @@ begin
 	sc = scatter!(embedding[1, :], embedding[2, :], color=nb_atoms)
 	Colorbar(f2[1, 2], sc, label="# atoms")
 	f2
+end
+
+# ╔═╡ 3b530821-dde7-4bd6-a76c-6a915a016af3
+md"## try diffusion maps instead"
+
+# ╔═╡ d8741e08-587e-4477-bcfb-db3dcab9bb23
+function diff_map(maxoutdim::Int)
+	# normalize rows to interpret as transition probabilities
+	D = diagm(vec(sum(K, dims=2)))
+	M = inv(D) * K # laplacian matrix
+
+	F = eigen(M, permute=false, scale=false)
+    λ = real.(F.values)
+    idx = sortperm(λ, rev=true)[2:maxoutdim+1]
+    λ = λ[idx]
+    V = real.(F.vectors[:, idx])
+    Y = λ .* V'
+end
+
+# ╔═╡ fdfbdeb5-71ec-4606-bbef-c33ed4177f8d
+embedding_dmap = diff_map(2)
+
+# ╔═╡ a6108c2e-e089-49ad-abf8-31fd6a80374a
+begin
+	f3 = Figure(resolution=(900, 900))
+	Axis(f3[1, 1], 
+		xlabel="diff map dim. 1", 
+		ylabel="diff map dim. 2", 
+		aspect=DataAspect(),
+		title="latent space of pesticides"
+	)
+	# sc2 = scatter!(embedding_dmap[1, :], embedding_dmap[2, :], color=nb_atoms)
+	# Colorbar(f3[1, 2], sc2, label="# atoms")
+	for l in ["Toxic", "Nontoxic"]
+	    scatter!(embedding_dmap[1, toxicity .== l], 
+			     embedding_dmap[2, toxicity .== l], 
+			label=l, strokewidth=2, color=(:white, 0.0), 
+			strokecolor=colors[l],
+			marker=markers[l]
+		)
+	end
+	axislegend()
+	f3
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1553,5 +1597,9 @@ version = "3.5.0+0"
 # ╠═4e38c47d-2053-477d-8ce5-8dbfbed9bcc2
 # ╠═ea3b198f-d184-4209-867d-00ec229d8299
 # ╠═b396b0b8-607b-46f5-9ab2-60d37ae13c71
+# ╟─3b530821-dde7-4bd6-a76c-6a915a016af3
+# ╠═d8741e08-587e-4477-bcfb-db3dcab9bb23
+# ╠═fdfbdeb5-71ec-4606-bbef-c33ed4177f8d
+# ╠═a6108c2e-e089-49ad-abf8-31fd6a80374a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
