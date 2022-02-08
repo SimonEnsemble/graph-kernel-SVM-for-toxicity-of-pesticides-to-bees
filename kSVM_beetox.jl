@@ -11,7 +11,7 @@ using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, UMAP, ColorSchemes, Scik
 using ScikitLearn.CrossValidation: train_test_split
 
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
-md"k-PCA on beetox data"
+md"k-SVM on beetox data"
 
 # ╔═╡ 0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 set_theme!(theme_light()); update_theme!(fontsize=20)
@@ -25,7 +25,7 @@ add_hydrogens = false
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
 begin
 	# load data from compute_Gram_matrix.jl
-	jldfilename = "centered_BeeTox_Gram_matrix_γ_$γ"
+	jldfilename = "BeeTox_Gram_matrix_γ_$γ"
 	if add_hydrogens
         jldfilename *= "w_Hs"
     end
@@ -1489,7 +1489,7 @@ version = "3.5.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╟─a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
+# ╠═a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 # ╠═985381fb-0f41-446a-869d-2ad8736b9403
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 # ╠═20fc87e4-c1ee-468c-ba2c-1dd65606df34
