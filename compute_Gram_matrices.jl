@@ -19,7 +19,12 @@ for γ in γs
     K = compute_Gram_matrix(mols, γ) # uncentered
     Kcentered = centered_Gram_matrix(K)
 
-    savename = "BeeTox_Gram_matrix_γ_$γ"
+    if addhydrogens_flag
+        savename = "with_hydrogens_file/"
+    else
+        savename = "none_hydrogens_file/"
+    end
+    savename *= "BeeTox_Gram_matrix_γ_$γ"
     if addhydrogens_flag
         savename *= "w_Hs"
     end

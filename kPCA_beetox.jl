@@ -22,7 +22,12 @@ add_hydrogens = false
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
 begin
 	# load data from compute_Gram_matrix.jl
-	jldfilename = "BeeTox_Gram_matrix_γ_$γ"
+	if add_hydrogens
+		jldfilename = "with_hydrogens_file/"
+	else
+		jldfilename = "none_hydrogens_file/"
+	end
+	jldfilename *= "BeeTox_Gram_matrix_γ_$γ"
 	if add_hydrogens
         jldfilename *= "w_Hs"
     end

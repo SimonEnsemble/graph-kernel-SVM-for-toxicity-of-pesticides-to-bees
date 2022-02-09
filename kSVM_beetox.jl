@@ -17,30 +17,42 @@ md"k-SVM on beetox data"
 set_theme!(theme_light()); update_theme!(fontsize=20)
 
 # ╔═╡ 20fc87e4-c1ee-468c-ba2c-1dd65606df34
-γ = 0.01 # parameter in random walk graph kernel
+γs = [0.01, 0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001]  
+# parameter in random walk graph kernel
 
 # ╔═╡ f8679dae-8322-4f3d-986b-8d857c29ff2d
 add_hydrogens = false
 
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
 begin
-	# load data from compute_Gram_matrix.jl
-	jldfilename = "BeeTox_Gram_matrix_γ_$γ"
-	if add_hydrogens
-        jldfilename *= "w_Hs"
-    end
-    jldfilename *= ".jld2"
-	@warn "K matrix centered on all data; need to change this."
-
-	mols     = load(jldfilename, "mols")
-	toxicity = load(jldfilename, "toxicity")
-	K        = load(jldfilename, "Kcentered")
+	toxicity_list, K_list, Kcentered_list = [], [], []
+	
+	for γ in γs
+		# load data from compute_Gram_matrix.jl
+		if add_hydrogens
+			jldfilename = "with_hydrogens_file/"
+		else
+			jldfilename = "none_hydrogens_file/"
+		end
+		jldfilename *= "BeeTox_Gram_matrix_γ_$γ"
+		if add_hydrogens
+			jldfilename *= "w_Hs"
+		end
+		jldfilename *= ".jld2"
+		toxicity = load(jldfilename, "toxicity")
+		K        = load(jldfilename, "K")
+		Kcentered= load(jldfilename, "Kcentered")
+		push!(toxicity_list, toxicity)
+		push!(K_list, K)
+		push!(Kcentered_list, Kcentered)
+	end
 end
 
 # ╔═╡ efd8a5de-82f4-4255-9982-ff866937261f
 begin
 	@sk_import svm : SVC
 	@sk_import metrics: confusion_matrix
+	@sk_import preprocessing: KernelCenterer
 end
 
 # ╔═╡ 5b256141-1995-40bb-9d7b-60fafcec6c90
@@ -53,23 +65,34 @@ markers = Dict("Toxic"    => :x,
 )
 
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
-y = map(t -> t == "Toxic" ? 1 : 0, toxicity)
+begin
+	y_list = []
+	for i = 1:length(toxicity_list)
+		push!(y_list, map(t -> t == "Toxic" ? 1 : 0, toxicity_list[i]))
+	end
+	y_list
+end
 
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
-ids_train, ids_test = train_test_split(1:length(y), test_size=0.2)
-
-# ╔═╡ 84fb2634-7698-4629-8df4-a9928abef658
-@info "TODO: k-folds cross-validation to optimize γ"
-
-# ╔═╡ a1849686-ad4c-4f75-9710-53fc3296e781
 begin
-	svc = SVC(kernel="precomputed")
-	svc.fit(K[ids_train, ids_train], y[ids_train])
-	svc.score(K[ids_test, ids_train], y[ids_test])
+	scores = zeros(length(y_list))
+	y_pred_list = []
+	cm_list = []
+	for i = 1:length(y_list)
+		ids_train, ids_test = train_test_split(1:length(y_list[i]), test_size=0.2)
+		svc = SVC(kernel="precomputed")
+		svc.fit(Kcentered_list[i][ids_train, ids_train], y_list[i][ids_train])
+		tf = KernelCenterer().fit(Kcentered_list[i][ids_train, ids_train])
+		scores[i] = svc.score(tf.transform(K_list[i][ids_test, ids_train]), y_list[i][ids_test])
+		push!(y_pred_list, svc.predict(tf.transform(K_list[i][ids_test, ids_train])))
+		cm = confusion_matrix(y_list[i][ids_test], y_pred_list[i])
+		push!(cm_list, cm)
+	end
+	scores
 end
 
 # ╔═╡ b9f49c8a-7cdd-4f8b-bd02-6f620325e281
-y_pred = svc.predict(K[ids_test, ids_train])
+y_pred_list
 
 # ╔═╡ 8d2dd082-b587-4bcc-9b5a-cf38375927ba
 function viz_confusion_matrix(cm::Matrix{Int64}, class_list::Vector{String})
@@ -91,11 +114,8 @@ function viz_confusion_matrix(cm::Matrix{Int64}, class_list::Vector{String})
     fig
 end
 
-# ╔═╡ 7fafe68f-d605-44b1-95f7-7086ccda83a2
-cm = confusion_matrix(y[ids_test], y_pred)
-
 # ╔═╡ 4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
-viz_confusion_matrix(cm, ["non-toxic", "toxic"])
+viz_confusion_matrix(cm_list[5], ["non-toxic", "toxic"])
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1489,7 +1509,7 @@ version = "3.5.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
+# ╟─a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 # ╠═985381fb-0f41-446a-869d-2ad8736b9403
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 # ╠═20fc87e4-c1ee-468c-ba2c-1dd65606df34
@@ -1501,11 +1521,8 @@ version = "3.5.0+0"
 # ╠═22a66b19-9a1a-4c24-8aa8-0689a10d1f67
 # ╠═119ffdca-7f51-4e71-b825-843da6a75413
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
-# ╠═84fb2634-7698-4629-8df4-a9928abef658
-# ╠═a1849686-ad4c-4f75-9710-53fc3296e781
 # ╠═b9f49c8a-7cdd-4f8b-bd02-6f620325e281
 # ╠═8d2dd082-b587-4bcc-9b5a-cf38375927ba
-# ╠═7fafe68f-d605-44b1-95f7-7086ccda83a2
 # ╠═4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
