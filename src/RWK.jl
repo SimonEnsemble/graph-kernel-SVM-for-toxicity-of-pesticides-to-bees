@@ -89,6 +89,16 @@ function grw_kernel(molecule_a::GraphMol, molecule_b::GraphMol, γ::Float64)
     return grw_kernel(dpg, γ)
 end
 
+function rw_kernel_fixed_length(dpg::MetaGraph, l::Int64)
+    A_x = Matrix(adjacency_matrix(dpg))
+    return sum(A_x ^ l)
+end
+
+function rw_kernel_fixed_length(molecule_a::GraphMol, molecule_b::GraphMol, l::Int64)
+    dpg = direct_product_graph(molecule_a, molecule_b)
+    return rw_kernel_fixed_length(dpg, l)
+end
+
 function fixed_point_grw_kernel(A_x::Matrix, γ::Float64; ϵ::Float64=0.001)
     # B = I - γ*A
     # to compute Inverse B 
