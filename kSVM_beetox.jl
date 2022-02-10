@@ -8,7 +8,7 @@ using InteractiveUtils
 using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, UMAP, ColorSchemes, ScikitLearn, MolecularGraph
 
 # ╔═╡ 7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
-using ScikitLearn.CrossValidation: train_test_split
+using ScikitLearn.CrossValidation: train_test_split, KFold
 
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 md"k-SVM on beetox data"
@@ -25,7 +25,8 @@ add_hydrogens = false
 
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
 begin
-	toxicity_list, K_list, Kcentered_list = [], [], []
+	K_list = []
+	toxicity = []
 	
 	for γ in γs
 		# load data from compute_Gram_matrix.jl
@@ -41,10 +42,7 @@ begin
 		jldfilename *= ".jld2"
 		toxicity = load(jldfilename, "toxicity")
 		K        = load(jldfilename, "K")
-		Kcentered= load(jldfilename, "Kcentered")
-		push!(toxicity_list, toxicity)
 		push!(K_list, K)
-		push!(Kcentered_list, Kcentered)
 	end
 end
 
@@ -65,34 +63,53 @@ markers = Dict("Toxic"    => :x,
 )
 
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
-begin
-	y_list = []
-	for i = 1:length(toxicity_list)
-		push!(y_list, map(t -> t == "Toxic" ? 1 : 0, toxicity_list[i]))
-	end
-	y_list
-end
+y = map(t -> t == "Toxic" ? 1 : 0, toxicity)
 
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
-	scores = zeros(length(y_list))
-	y_pred_list = []
-	cm_list = []
-	for i = 1:length(y_list)
-		ids_train, ids_test = train_test_split(1:length(y_list[i]), test_size=0.2)
-		svc = SVC(kernel="precomputed")
-		svc.fit(Kcentered_list[i][ids_train, ids_train], y_list[i][ids_train])
-		tf = KernelCenterer().fit(Kcentered_list[i][ids_train, ids_train])
-		scores[i] = svc.score(tf.transform(K_list[i][ids_test, ids_train]), y_list[i][ids_test])
-		push!(y_pred_list, svc.predict(tf.transform(K_list[i][ids_test, ids_train])))
-		cm = confusion_matrix(y_list[i][ids_test], y_pred_list[i])
-		push!(cm_list, cm)
+	K = 5
+	ids_cv, ids_test = train_test_split(1:length(y), test_size=0.2)
+	kf = KFold(length(ids_cv), n_folds=K, shuffle=true)
+	
+	scores = zeros(length(γs))
+	for (i, γ) in enumerate(γs)
+		for (ids_cv_train, ids_cv_test) in kf
+			K_train = K_list[i][ids_cv_train, ids_cv_train]
+			tf = KernelCenterer().fit(K_train)
+			K_train_centered = tf.transform(K_train)
+			K_test = K_list[i][ids_cv_test, ids_cv_train]
+			K_test_centered = tf.transform(K_test)
+			
+			svc = SVC(kernel="precomputed")
+			svc.fit(K_train_centered, y[ids_cv_train])
+			scores[i] += svc.score(K_test_centered, y[ids_cv_test])
+		end
+		scores[i] /= K
 	end
 	scores
 end
 
 # ╔═╡ b9f49c8a-7cdd-4f8b-bd02-6f620325e281
-y_pred_list
+id_optimal_γ = argmax(scores)
+
+# ╔═╡ a5dff146-9183-4871-af28-658a95c15181
+begin
+	K_train = K_list[id_optimal_γ][ids_cv, ids_cv]
+	tf = KernelCenterer().fit(K_train)
+	K_train_centered = tf.transform(K_train)
+	K_test = K_list[id_optimal_γ][ids_test, ids_cv]
+	K_test_centered = tf.transform(K_test)
+			
+	svc = SVC(kernel="precomputed")
+	svc.fit(K_train_centered, y[ids_cv])
+	svc.score(K_test_centered, y[ids_test])
+end
+
+# ╔═╡ cc621b0f-9991-4c91-bb98-e6e4aa1f90cf
+y_pred = svc.predict(K_test_centered)
+
+# ╔═╡ c3d4aad5-b5ac-42c7-bcd9-7cf6d3397605
+cm = confusion_matrix(y[ids_test], y_pred)
 
 # ╔═╡ 8d2dd082-b587-4bcc-9b5a-cf38375927ba
 function viz_confusion_matrix(cm::Matrix{Int64}, class_list::Vector{String})
@@ -115,7 +132,7 @@ function viz_confusion_matrix(cm::Matrix{Int64}, class_list::Vector{String})
 end
 
 # ╔═╡ 4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
-viz_confusion_matrix(cm_list[5], ["non-toxic", "toxic"])
+viz_confusion_matrix(cm, ["non-toxic", "toxic"])
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1522,6 +1539,9 @@ version = "3.5.0+0"
 # ╠═119ffdca-7f51-4e71-b825-843da6a75413
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
 # ╠═b9f49c8a-7cdd-4f8b-bd02-6f620325e281
+# ╠═a5dff146-9183-4871-af28-658a95c15181
+# ╠═cc621b0f-9991-4c91-bb98-e6e4aa1f90cf
+# ╠═c3d4aad5-b5ac-42c7-bcd9-7cf6d3397605
 # ╠═8d2dd082-b587-4bcc-9b5a-cf38375927ba
 # ╠═4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
 # ╟─00000000-0000-0000-0000-000000000001
