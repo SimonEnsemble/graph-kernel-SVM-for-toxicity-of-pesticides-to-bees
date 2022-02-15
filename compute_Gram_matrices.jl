@@ -34,7 +34,9 @@ end
 compute Gram matrix
 =#
 for kernel in kernels
+    println("kernel = ", kernel)
     for p in params[kernel]
+        println("\tparam = ", p)
         # set up kernel
         rwk = dpg -> kernel(dpg, p)
         
