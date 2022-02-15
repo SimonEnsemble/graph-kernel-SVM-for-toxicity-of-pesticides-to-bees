@@ -20,7 +20,7 @@ set_theme!(theme_light()); update_theme!(fontsize=20)
 begin
 	kernel = "fixed_length_rw_kernel"
 	# kernel_params = [0.01, 0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001]  # γ
-	kernel_params = [1] # l
+	kernel_params = [0, 1, 2] # l
 end
 
 # ╔═╡ f8679dae-8322-4f3d-986b-8d857c29ff2d
