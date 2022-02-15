@@ -5,8 +5,18 @@ using RWK, JLD2, MolecularGraph, CSV, DataFrames
 settings
 =#
 include_hydrogens = false
-γs = [0.01, 0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001] # for geometric rwk
-γs = [0.01]
+kernels = [fixed_length_rw_kernel, grw_kernel]
+params = Dict(
+     #"geometric" => [0.01, 0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001], # for geometric rwk
+     grw_kernel            => [], # γ's
+     fixed_length_rw_kernel => [1, 2, 3, 4, 5] # l's
+)
+
+# set up directory for storing data
+savedir = "include_hydrogens_$include_hydrogens"
+if ! isdir(savedir)
+   mkdir(savedir)
+end
 
 #=
 load BeeToxAI dataset
@@ -21,24 +31,21 @@ if include_hydrogens
 end
 
 #=
-compute Gram matrix for geometric rwk
+compute Gram matrix
 =#
-for γ in γs
-    rwk = dpg -> grw_kernel(dpg, γ)
-    K = compute_Gram_matrix(mols, rwk) # uncentered
-    Kcentered = centered_Gram_matrix(K)
-
-    if include_hydrogens
-        savename = "with_hydrogens_file/"
-    else
-        savename = "none_hydrogens_file/"
+for kernel in kernels
+    for p in params[kernel]
+        # set up kernel
+        rwk = dpg -> kernel(dpg, p)
+        
+        # compute gram matrix
+        K = compute_Gram_matrix(mols, rwk) # uncentered
+        
+        # center the gram matrix
+        Kcentered = centered_Gram_matrix(K)
+        
+        # save to file
+        savename = "BeeTox_$(kernel)_$p.jld2"
+        jldsave(joinpath(savedir, savename); K, Kcentered, mols, toxicity)
     end
-    savename *= "BeeTox_Gram_matrix_γ_$γ"
-    if include_hydrogens
-        savename *= "w_Hs"
-    end
-    savename *= ".jld2"
-
-	jldsave(savename; K, Kcentered, mols, toxicity)
 end
-

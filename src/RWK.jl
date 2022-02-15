@@ -2,7 +2,7 @@ module RWK
 
 using Graphs, MolecularGraph, LinearAlgebra, MetaGraphs, ProgressMeter
 
-export direct_product_graph, grw_kernel, fixed_point_grw_kernel, compute_Gram_matrix, centered_Gram_matrix
+export direct_product_graph, grw_kernel, fixed_point_grw_kernel, compute_Gram_matrix, centered_Gram_matrix, fixed_length_rw_kernel
 
 # for GraphMol, need to confirm if the bond has the same order
 function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=false)
@@ -89,12 +89,12 @@ function grw_kernel(molecule_a::GraphMol, molecule_b::GraphMol, γ::Float64)
     return grw_kernel(dpg, γ)
 end
 
-function rw_kernel_fixed_length(dpg::MetaGraph, l::Int64)
+function fixed_length_rw_kernel(dpg::MetaGraph, l::Int64)
     A_x = Matrix(adjacency_matrix(dpg))
     return sum(A_x ^ l)
 end
 
-function rw_kernel_fixed_length(molecule_a::GraphMol, molecule_b::GraphMol, l::Int64)
+function fixed_length_rw_kernel(molecule_a::GraphMol, molecule_b::GraphMol, l::Int64)
     dpg = direct_product_graph(molecule_a, molecule_b)
     return rw_kernel_fixed_length(dpg, l)
 end
