@@ -128,8 +128,7 @@ function fixed_point_grw_kernel(molecule_a::GraphMol, molecule_b::GraphMol, γ::
     return fixed_point_grw_kernel(dpg, γ, ϵ = ϵ)
 end
 
-function compute_Gram_matrix(mols::Vector{GraphMol{SmilesAtom, SmilesBond}}, γ::Float64;
-                            verbose::Bool=false)
+function compute_Gram_matrix(mols::Vector{GraphMol{SmilesAtom, SmilesBond}}, rwk::Function)
     n_mol = length(mols) # number of molecules
     
     # for progress bar
@@ -139,9 +138,9 @@ function compute_Gram_matrix(mols::Vector{GraphMol{SmilesAtom, SmilesBond}}, γ:
     K = zeros(n_mol, n_mol) # Gram matrix
     for m = 1:n_mol
         for n = m:n_mol
-            dpg = direct_product_graph(mols[m], mols[n], verbose=verbose)
+            dpg = direct_product_graph(mols[m], mols[n], verbose=false)
 
-            K[m, n] = grw_kernel(dpg, γ)
+            K[m, n] = rwk(dpg)
             K[n, m] = K[m, n]
 
             next!(pbar)
