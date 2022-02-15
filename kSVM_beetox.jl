@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.17.7
+# v0.18.0
 
 using Markdown
 using InteractiveUtils
@@ -16,33 +16,30 @@ md"k-SVM on beetox data"
 # ╔═╡ 0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 set_theme!(theme_light()); update_theme!(fontsize=20)
 
-# ╔═╡ 20fc87e4-c1ee-468c-ba2c-1dd65606df34
-γs = [0.01, 0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001]  
-# parameter in random walk graph kernel
+# ╔═╡ 70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
+begin
+	kernel = "fixed_length_rw_kernel"
+	# kernel_params = [0.01, 0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001]  # γ
+	kernel_params = [1] # l
+end
 
 # ╔═╡ f8679dae-8322-4f3d-986b-8d857c29ff2d
-add_hydrogens = false
+begin
+	include_hydrogens = false
+	data_dir = "include_hydrogens_$include_hydrogens"
+end
 
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
 begin
-	K_list = []
+	Ks = []
 	toxicity = []
-	
-	for γ in γs
+	for p in kernel_params
 		# load data from compute_Gram_matrix.jl
-		if add_hydrogens
-			jldfilename = "with_hydrogens_file/"
-		else
-			jldfilename = "none_hydrogens_file/"
-		end
-		jldfilename *= "BeeTox_Gram_matrix_γ_$γ"
-		if add_hydrogens
-			jldfilename *= "w_Hs"
-		end
-		jldfilename *= ".jld2"
+		jldfilename = joinpath(data_dir, "BeeTox_$(kernel)_$p.jld2")
+		
 		toxicity = load(jldfilename, "toxicity")
 		K        = load(jldfilename, "K")
-		push!(K_list, K)
+		push!(Ks, K)
 	end
 end
 
@@ -67,24 +64,28 @@ y = map(t -> t == "Toxic" ? 1 : 0, toxicity)
 
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
-	K = 5
+	n_folds = 5
 	ids_cv, ids_test = train_test_split(1:length(y), test_size=0.2)
-	kf = KFold(length(ids_cv), n_folds=K, shuffle=true)
+	kf = KFold(length(ids_cv), n_folds=n_folds, shuffle=true)
 	
-	scores = zeros(length(γs))
-	for (i, γ) in enumerate(γs)
+	scores = zeros(length(kernel_params))
+	for i = 1:length(kernel_params)
 		for (ids_cv_train, ids_cv_test) in kf
-			K_train = K_list[i][ids_cv_train, ids_cv_train]
+			K = Ks[i]
+			
+			K_train = K[ids_cv_train, ids_cv_train]
+			K_test = K[ids_cv_test, ids_cv_train]
+			
 			tf = KernelCenterer().fit(K_train)
 			K_train_centered = tf.transform(K_train)
-			K_test = K_list[i][ids_cv_test, ids_cv_train]
 			K_test_centered = tf.transform(K_test)
 			
 			svc = SVC(kernel="precomputed")
 			svc.fit(K_train_centered, y[ids_cv_train])
+			
 			scores[i] += svc.score(K_test_centered, y[ids_cv_test])
 		end
-		scores[i] /= K
+		scores[i] /= n_folds
 	end
 	scores
 end
@@ -94,14 +95,18 @@ id_optimal_γ = argmax(scores)
 
 # ╔═╡ a5dff146-9183-4871-af28-658a95c15181
 begin
-	K_train = K_list[id_optimal_γ][ids_cv, ids_cv]
+	K = Ks[id_optimal_γ]
+	
+	K_train = K[ids_cv, ids_cv]
+	K_test  = K[ids_test, ids_cv]
+	
 	tf = KernelCenterer().fit(K_train)
 	K_train_centered = tf.transform(K_train)
-	K_test = K_list[id_optimal_γ][ids_test, ids_cv]
 	K_test_centered = tf.transform(K_test)
 			
 	svc = SVC(kernel="precomputed")
 	svc.fit(K_train_centered, y[ids_cv])
+	
 	svc.score(K_test_centered, y[ids_test])
 end
 
@@ -162,8 +167,9 @@ UMAP = "~0.1.9"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.1"
+julia_version = "1.8.0-DEV.1390"
 manifest_format = "2.0"
+project_hash = "ba7390f363287e2cebf73b3ef0caf8a8c802f2bb"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -190,6 +196,7 @@ version = "0.4.1"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
+version = "1.1.1"
 
 [[deps.ArnoldiMethod]]
 deps = ["LinearAlgebra", "Random", "StaticArrays"]
@@ -331,6 +338,7 @@ version = "3.41.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
+version = "0.5.0+0"
 
 [[deps.Conda]]
 deps = ["Downloads", "JSON", "VersionParsing"]
@@ -420,8 +428,9 @@ uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.8.6"
 
 [[deps.Downloads]]
-deps = ["ArgTools", "LibCURL", "NetworkOptions"]
+deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+version = "1.6.0"
 
 [[deps.EarCut_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -476,6 +485,9 @@ deps = ["Compat", "Dates", "Mmap", "Printf", "Test", "UUIDs"]
 git-tree-sha1 = "04d13bfa8ef11720c24e4d840c0033d145537df7"
 uuid = "48062228-2e41-5def-b9a4-89aafe57970f"
 version = "0.9.17"
+
+[[deps.FileWatching]]
+uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -735,10 +747,12 @@ version = "0.2.2"
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
+version = "0.6.3"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
+version = "7.73.0+4"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -747,6 +761,7 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
+version = "1.9.1+2"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -859,6 +874,7 @@ version = "0.2.1"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+version = "2.24.0+2"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -883,6 +899,7 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
+version = "2020.7.22"
 
 [[deps.NLSolversBase]]
 deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
@@ -909,6 +926,7 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
+version = "1.2.0"
 
 [[deps.Nullables]]
 git-tree-sha1 = "8f87854cc8f3685a60689d8edecaa29d2251979b"
@@ -935,6 +953,7 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+version = "0.3.17+2"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -951,6 +970,7 @@ version = "3.1.1+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
+version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1038,6 +1058,7 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -1152,6 +1173,7 @@ version = "0.3.0+0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "0.7.0"
 
 [[deps.SIMD]]
 git-tree-sha1 = "39e3df417a0dd0c4e1f89891a281f82f5373ea3b"
@@ -1296,6 +1318,7 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+version = "1.0.0"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
@@ -1312,6 +1335,7 @@ version = "1.6.1"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1451,6 +1475,7 @@ version = "0.4.7"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
+version = "1.2.12+1"
 
 [[deps.coordgenlibs_jll]]
 deps = ["Libdl", "Pkg"]
@@ -1473,6 +1498,7 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+version = "4.0.0+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1507,10 +1533,12 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+version = "1.41.0+1"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+version = "16.2.1+1"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1529,7 +1557,7 @@ version = "3.5.0+0"
 # ╟─a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 # ╠═985381fb-0f41-446a-869d-2ad8736b9403
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
-# ╠═20fc87e4-c1ee-468c-ba2c-1dd65606df34
+# ╠═70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
 # ╠═f8679dae-8322-4f3d-986b-8d857c29ff2d
 # ╠═008f0df9-5cdb-449d-a837-3d808536d30a
 # ╠═7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
