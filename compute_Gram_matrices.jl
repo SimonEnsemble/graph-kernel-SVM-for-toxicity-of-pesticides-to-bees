@@ -26,12 +26,17 @@ convert SMILES to graphs
 data = CSV.read("new_smiles.csv", DataFrame)
 toxicity = data[:, "Outcome"] # targets
 
-mols = [smilestomol(smiles) for smiles in data[1:10, "SMILES"]]
+mols = [smilestomol(smiles) for smiles in data[:, "SMILES"]]
 if include_hydrogens
 	mols = addhydrogens.(mols)
 end
 
+#=
+ compute Gram matrix for the different kernel params
+=#
 n_mol = length(mols) # number of molecules
+n_jobs = Int(n_mol * (n_mol - 1) / 2 + n_mol) # for progress bar
+pbar = Progress(n_jobs, 1)
 println("\t# molecules = ", n_mol)
 for p in params
     println("\t\tcomputing Gram matrix for kernel param = ", p)
@@ -47,6 +52,8 @@ for p in params
 
             K[m, n] = rwk(dpg)
             K[n, m] = K[m, n]
+            
+            next!(pbar)
         end
     end
     K = Matrix(K)
