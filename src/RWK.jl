@@ -2,14 +2,19 @@ module RWK
 
 using Graphs, MolecularGraph, LinearAlgebra, MetaGraphs, ProgressMeter
 
-export direct_product_graph, grw_kernel, fixed_point_grw_kernel, compute_Gram_matrix, centered_Gram_matrix, fixed_length_rw_kernel
+export direct_product_graph, grw_kernel, fixed_point_grw_kernel, centered_Gram_matrix, fixed_length_rw_kernel
 
 # for GraphMol, need to confirm if the bond has the same order
 function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=false)
     # unpack species, bond orders
     vertex_labels_a, vertex_labels_b = atomsymbol(mol_a), atomsymbol(mol_b)
     n_a, n_b = length(vertex_labels_a), length(vertex_labels_b)
+    # bond order gives edge labels (but aromatic not included)
     edge_labels_a, edge_labels_b = bondorder(mol_a), bondorder(mol_b)
+    # re-label edges with aromatic as -1 to distinguish aromatic from 2nd order bond
+    # this is very important b/c otherwise the aromatic bonds are labeled (randomly) with 1, 2
+    edge_labels_a[isaromaticbond(mol_a)] .= -1 
+    edge_labels_b[isaromaticbond(mol_b)] .= -1 
 
     #= 
     construct vertices of the direct product graph, axb.
@@ -126,28 +131,6 @@ end
 function fixed_point_grw_kernel(molecule_a::GraphMol, molecule_b::GraphMol, γ::Float64; ϵ::Float64=0.001)
     dpg = direct_product_graph(molecule_a, molecule_b)
     return fixed_point_grw_kernel(dpg, γ, ϵ = ϵ)
-end
-
-function compute_Gram_matrix(mols::Vector{GraphMol{SmilesAtom, SmilesBond}}, rwk::Function)
-    n_mol = length(mols) # number of molecules
-    
-    # for progress bar
-    n_jobs = Int(n_mol * (n_mol - 1) / 2 + n_mol)
-    pbar = Progress(n_jobs, 1)
-
-    K = zeros(n_mol, n_mol) # Gram matrix
-    for m = 1:n_mol
-        for n = m:n_mol
-            dpg = direct_product_graph(mols[m], mols[n], verbose=false)
-
-            K[m, n] = rwk(dpg)
-            K[n, m] = K[m, n]
-
-            next!(pbar)
-        end
-    end
-
-    return K
 end
 
 function centered_Gram_matrix(K::Matrix{Float64})
