@@ -53,7 +53,7 @@ for p in params
             K[m, n] = rwk(dpg)
             K[n, m] = K[m, n]
             
-            next!(pbar)
+            #next!(pbar)
         end
     end
     K = Matrix(K)
