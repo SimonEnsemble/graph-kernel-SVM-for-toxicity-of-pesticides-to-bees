@@ -1,4 +1,4 @@
-push!(LOAD_PATH, joinpath(pwd(), "src"))
+@everywhere push!(LOAD_PATH, joinpath(pwd(), "src"))
 using Distributed, SharedArrays, JLD2, MolecularGraph, CSV, DataFrames, ProgressMeter
 @everywhere using RWK
 
@@ -7,7 +7,7 @@ settings
 =#
 include_hydrogens = false
 kernel = fixed_length_rw_kernel
-params = [1, 2] # l's
+params = [1, 2, 3, 4] # l's
 # kernel = grw_kernel
 # params = [0.05, 0.04, 0.03, 0.02, 0.01], # γ's
 

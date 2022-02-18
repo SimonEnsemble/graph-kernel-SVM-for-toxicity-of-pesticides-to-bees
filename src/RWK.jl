@@ -5,7 +5,7 @@ using Graphs, MolecularGraph, LinearAlgebra, MetaGraphs, ProgressMeter
 export direct_product_graph, grw_kernel, fixed_point_grw_kernel, centered_Gram_matrix, fixed_length_rw_kernel
 
 # for GraphMol, need to confirm if the bond has the same order
-function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=false)
+function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=false, store_vertex_pair::Bool=false)
     # unpack species, bond orders
     vertex_labels_a, vertex_labels_b = atomsymbol(mol_a), atomsymbol(mol_b)
     n_a, n_b = length(vertex_labels_a), length(vertex_labels_b)
@@ -31,7 +31,9 @@ function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=fa
             if vertex_labels_a[a] == vertex_labels_b[b]
                 add_vertex!(axb)
                 ab_vertex_pair_to_axb_vertex[a, b] = nv(axb)
-                set_props!(axb, nv(axb), Dict(:vertex_pair => (a, b)))
+                if store_vertex_pair
+                    set_props!(axb, nv(axb), Dict(:vertex_pair => (a, b)))
+                end
             end
         end
     end
@@ -44,8 +46,14 @@ function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=fa
         for speed, do this as a loop over pairs of edges in a and b, which
           are candidates for edges in axb.
         conditions for an edge between v1=(a1, b1) and v2=(a2, b2):
-            * v1
-            * 
+            1. v1, v2 in d.p.g.
+                => l(a1) = l(b1) and l(a2) = l(b2) [via above code]
+            2. edge {a1, a2} in mol_a
+            3. edge {b1, b2} in mol_b
+            4. l({a1, a2}) = l({b1, b2})
+        since we loop over edges, conditions 2, 3 met inside loop
+        first line inside loop checks condition 4
+        to check condition 1, we check possibility v1=(a1,b2), v2=(a2,b1) also.
     =#
     for (e_a, (a_1, a_2)) in enumerate(mol_a.edges)
         for (e_b, (b_1, b_2)) in enumerate(mol_b.edges)
@@ -101,7 +109,7 @@ end
 
 function fixed_length_rw_kernel(molecule_a::GraphMol, molecule_b::GraphMol, l::Int64)
     dpg = direct_product_graph(molecule_a, molecule_b)
-    return rw_kernel_fixed_length(dpg, l)
+    return fixed_length_rw_kernel(dpg, l)
 end
 
 function fixed_point_grw_kernel(A_x::Matrix, γ::Float64; ϵ::Float64=0.001)
