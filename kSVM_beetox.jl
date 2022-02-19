@@ -11,16 +11,30 @@ using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLear
 using ScikitLearn.CrossValidation: train_test_split, KFold
 
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
-md"k-SVM on beetox data"
+md"# k-SVM on beetox data"
+
+# ╔═╡ efd8a5de-82f4-4255-9982-ff866937261f
+begin
+	@sk_import svm : SVC
+	@sk_import metrics: confusion_matrix
+	@sk_import preprocessing: KernelCenterer
+end
 
 # ╔═╡ 0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
-set_theme!(theme_light()); update_theme!(fontsize=20)
+# plotting stuff
+begin
+	set_theme!(theme_light()); update_theme!(fontsize=20)
+	markers = Dict("Toxic"    => :x,
+		           "Nontoxic" => :circle)
+	colors = Dict("Toxic"    => ColorSchemes.Dark2_3[3], 
+				  "Nontoxic" => ColorSchemes.Dark2_3[1])
+end
 
 # ╔═╡ 70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
 begin
 	kernel = "fixed_length_rw_kernel"
 	# kernel_params = [0.01, 0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001]  # γ
-	kernel_params = [1, 2, 3, 4] # l
+	kernel_params = [1, 2, 3, 4, 5, 6, 7, 8] # l
 end
 
 # ╔═╡ f8679dae-8322-4f3d-986b-8d857c29ff2d
@@ -37,32 +51,30 @@ begin
 		# load data from compute_Gram_matrix.jl
 		jldfilename = joinpath(data_dir, "BeeTox_$(kernel)_$p.jld2")
 		
-		toxicity = load(jldfilename, "toxicity")
+		toxicity = Vector(load(jldfilename, "toxicity"))
 		K        = load(jldfilename, "K")
 		push!(Ks, K)
 	end
 	Ks
 end
 
-# ╔═╡ efd8a5de-82f4-4255-9982-ff866937261f
-begin
-	@sk_import svm : SVC
-	@sk_import metrics: confusion_matrix
-	@sk_import preprocessing: KernelCenterer
-end
-
-# ╔═╡ 5b256141-1995-40bb-9d7b-60fafcec6c90
-colors = Dict("Toxic"    => ColorSchemes.Dark2_3[3], 
-	          "Nontoxic" => ColorSchemes.Dark2_3[1]
-)
-
-# ╔═╡ 22a66b19-9a1a-4c24-8aa8-0689a10d1f67
-markers = Dict("Toxic"    => :x,
-	           "Nontoxic" => :circle
-)
-
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
-y = map(t -> t == "Toxic" ? 1 : 0, toxicity)
+y = map(t -> t == "Toxic" ? 1 : 0, toxicity) # 1 = toxic
+
+# ╔═╡ 14d49e19-92e2-4127-9224-35d09e852447
+function train_svm(K_train::Matrix, y_train::Vector, C::Float64)
+	# determine centering of Gram matrix
+	tf = KernelCenterer().fit(K_train)
+
+	# center Gram matrix
+	K_train_centered = tf.transform(K_train)
+
+	# train suppor vector classifier
+	svc = SVC(kernel="precomputed", C=C)
+	svc.fit(K_train_centered, y_train)
+
+	return svc, tf
+end
 
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
@@ -70,23 +82,20 @@ begin
 	ids_cv, ids_test = train_test_split(1:length(y), test_size=0.2)
 	kf = KFold(length(ids_cv), n_folds=n_folds, shuffle=true)
 
-	Cs = 10 .^ range(-3, 0, length=6)
+	Cs = 10 .^ range(-5, 1, length=10)
 	
 	scores = zeros(length(kernel_params), length(Cs))
 	for i = 1:length(kernel_params)
 		K = Ks[i]
 		for j = 1:length(Cs)
 			for (ids_cv_train, ids_cv_test) in kf
+				# train SVM on cv-train data
 				K_train = K[ids_cv_train, ids_cv_train]
+				svc, tf = train_svm(K_train, y[ids_cv_train], Cs[j])
+
+				# score SVM on cv-test data
 				K_test = K[ids_cv_test, ids_cv_train]
-				
-				tf = KernelCenterer().fit(K_train)
-				K_train_centered = tf.transform(K_train)
 				K_test_centered = tf.transform(K_test)
-				
-				svc = SVC(kernel="precomputed", C=Cs[j])
-				svc.fit(K_train_centered, y[ids_cv_train])
-				
 				scores[i, j] += svc.score(K_test_centered, y[ids_cv_test])
 			end
 		end
@@ -105,15 +114,10 @@ begin
 	K = Ks[id_opt_kernel_param]
 	
 	K_train = K[ids_cv, ids_cv]
+	svc, tf = train_svm(K_train, y[ids_cv], C_opt)
+	
 	K_test  = K[ids_test, ids_cv]
-	
-	tf = KernelCenterer().fit(K_train)
-	K_train_centered = tf.transform(K_train)
 	K_test_centered = tf.transform(K_test)
-			
-	svc = SVC(kernel="precomputed", C=C_opt)
-	svc.fit(K_train_centered, y[ids_cv])
-	
 	acc = svc.score(K_test_centered, y[ids_test])
 end
 
@@ -123,6 +127,33 @@ with_terminal() do
 	println("opt kernel param = ", kernel_params[id_opt_kernel_param])
 	println("test set accuracy = ", round(acc, digits=2))
 end
+
+# ╔═╡ aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
+function viz_validation_results(kernel_params, Cs, val_scores)
+	cmap = ColorSchemes.linear_green_5_95_c69_n256
+
+	fig = Figure()
+
+	ax = Axis(fig[1, 1], 
+			  xlabel="C",
+			  ylabel="kernel param",
+		      aspect=length(Cs) / length(kernel_params),
+			  xticks=(1:length(Cs), 
+			          ["$(round(C, digits=4))" for C in Cs]),
+		      yticks=(1:length(kernel_params), 
+			         reverse(["$p" for p in kernel_params])),
+		      xticklabelrotation=π/2
+	)
+
+	hm = heatmap!(reverse(val_scores, dims=1)', colormap=cmap)
+
+	Colorbar(fig[1, 2], hm, label="validation score")
+
+	return fig
+end
+
+# ╔═╡ 0905cfbe-16d5-4c2c-ba14-98be50d54bda
+viz_validation_results(kernel_params, Cs, scores)
 
 # ╔═╡ cc621b0f-9991-4c91-bb98-e6e4aa1f90cf
 y_pred = svc.predict(K_test_centered)
@@ -165,7 +196,6 @@ ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-MolecularGraph = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 ScikitLearn = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
 
@@ -175,7 +205,6 @@ CairoMakie = "~0.7.3"
 ColorSchemes = "~3.17.1"
 DataFrames = "~1.3.2"
 JLD2 = "~0.4.21"
-MolecularGraph = "~0.11.0"
 PlutoUI = "~0.7.34"
 ScikitLearn = "~0.6.4"
 """
@@ -747,12 +776,6 @@ version = "1.3.0"
 deps = ["Artifacts", "Pkg"]
 uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 
-[[deps.LazyJSON]]
-deps = ["JSON", "OrderedCollections", "PropertyDicts"]
-git-tree-sha1 = "ce08411caa70e0c9e780f142f59debd89a971738"
-uuid = "fc18253b-5e1b-504c-a4a2-9ece4944c004"
-version = "0.2.2"
-
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
@@ -878,12 +901,6 @@ version = "1.0.2"
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
-[[deps.MolecularGraph]]
-deps = ["DelimitedFiles", "JSON", "LinearAlgebra", "Printf", "Requires", "Statistics", "Unmarshal", "YAML", "coordgenlibs_jll", "libinchi_jll"]
-git-tree-sha1 = "2c4173d918e302011361852864923f9bc2fb6b4c"
-uuid = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
-version = "0.11.0"
-
 [[deps.MosaicViews]]
 deps = ["MappedArrays", "OffsetArrays", "PaddedViews", "StackViews"]
 git-tree-sha1 = "b34e3bc3ca7c94914418637cb10cc4d1d80d877d"
@@ -906,11 +923,6 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
-
-[[deps.Nullables]]
-git-tree-sha1 = "8f87854cc8f3685a60689d8edecaa29d2251979b"
-uuid = "4d1e1d77-625e-5b40-9113-a560ec7a8ecd"
-version = "1.0.0"
 
 [[deps.Observables]]
 git-tree-sha1 = "fe29afdef3d0c4a8286128d4e45cc50621b1e43d"
@@ -1080,11 +1092,6 @@ deps = ["Distributed", "Printf"]
 git-tree-sha1 = "afadeba63d90ff223a6a48d2009434ecee2ec9e8"
 uuid = "92933f4c-e287-5a05-a399-4b506db050ca"
 version = "1.7.1"
-
-[[deps.PropertyDicts]]
-git-tree-sha1 = "429d887daee312e73842cabe6b122e310b72e25d"
-uuid = "f8a19df8-e894-5f55-a973-672c1158cbca"
-version = "0.1.0"
 
 [[deps.PyCall]]
 deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
@@ -1269,12 +1276,6 @@ git-tree-sha1 = "25405d7016a47cf2bd6cd91e66f4de437fd54a07"
 uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
 version = "0.9.16"
 
-[[deps.StringEncodings]]
-deps = ["Libiconv_jll"]
-git-tree-sha1 = "50ccd5ddb00d19392577902f0079267a72c5ab04"
-uuid = "69024149-9ee7-55f6-a4c4-859efe599b68"
-version = "0.3.5"
-
 [[deps.StructArrays]]
 deps = ["Adapt", "DataAPI", "StaticArrays", "Tables"]
 git-tree-sha1 = "d21f2c564b21a202f4677c0fba5b5ee431058544"
@@ -1344,12 +1345,6 @@ deps = ["REPL"]
 git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
 uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
 version = "0.4.1"
-
-[[deps.Unmarshal]]
-deps = ["JSON", "LazyJSON", "Missings", "Nullables", "Requires"]
-git-tree-sha1 = "ee46863309f8f942249e1df1b74ba3088ff0f151"
-uuid = "cbff2730-442d-58d7-89d1-8e530c41eb02"
-version = "0.4.4"
 
 [[deps.VersionParsing]]
 git-tree-sha1 = "58d6e80b4ee071f5efd07fda82cb9fbe17200868"
@@ -1428,21 +1423,9 @@ git-tree-sha1 = "79c31e7844f6ecf779705fbc12146eb190b7d845"
 uuid = "c5fb5394-a638-5e4d-96e5-b29de1b5cf10"
 version = "1.4.0+3"
 
-[[deps.YAML]]
-deps = ["Base64", "Dates", "Printf", "StringEncodings"]
-git-tree-sha1 = "3c6e8b9f5cdaaa21340f841653942e1a6b6561e5"
-uuid = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
-version = "0.4.7"
-
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-
-[[deps.coordgenlibs_jll]]
-deps = ["Libdl", "Pkg"]
-git-tree-sha1 = "95b76590b9a558b69566b59cc64415b29618113b"
-uuid = "f6050b86-aaaf-512f-8549-0afff1b4d57f"
-version = "1.4.0+0"
 
 [[deps.isoband_jll]]
 deps = ["Libdl", "Pkg"]
@@ -1465,12 +1448,6 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "daacc84a041563f965be61859a36e17c4e4fcd55"
 uuid = "f638f0a6-7fb0-5443-88ba-1cc74229b280"
 version = "2.0.2+0"
-
-[[deps.libinchi_jll]]
-deps = ["Libdl", "Pkg"]
-git-tree-sha1 = "63e5bdbfc6fd1b4a14dda769dfad40a2e78baaeb"
-uuid = "172afb32-8f1c-513b-968f-184fcd77af72"
-version = "1.5.0+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
@@ -1514,20 +1491,21 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╟─a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 # ╠═985381fb-0f41-446a-869d-2ad8736b9403
+# ╠═7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
+# ╠═efd8a5de-82f4-4255-9982-ff866937261f
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 # ╠═70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
 # ╠═f8679dae-8322-4f3d-986b-8d857c29ff2d
 # ╠═008f0df9-5cdb-449d-a837-3d808536d30a
-# ╠═7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
-# ╠═efd8a5de-82f4-4255-9982-ff866937261f
-# ╠═5b256141-1995-40bb-9d7b-60fafcec6c90
-# ╠═22a66b19-9a1a-4c24-8aa8-0689a10d1f67
 # ╠═119ffdca-7f51-4e71-b825-843da6a75413
+# ╠═14d49e19-92e2-4127-9224-35d09e852447
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
 # ╠═b9f49c8a-7cdd-4f8b-bd02-6f620325e281
 # ╠═87cc0aee-f1f6-46dc-8bfd-e483e1e91a9b
 # ╠═a5dff146-9183-4871-af28-658a95c15181
 # ╠═983261c6-1b1e-42a0-a92d-db85741ec89d
+# ╠═aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
+# ╠═0905cfbe-16d5-4c2c-ba14-98be50d54bda
 # ╠═cc621b0f-9991-4c91-bb98-e6e4aa1f90cf
 # ╠═c3d4aad5-b5ac-42c7-bcd9-7cf6d3397605
 # ╠═8d2dd082-b587-4bcc-9b5a-cf38375927ba
