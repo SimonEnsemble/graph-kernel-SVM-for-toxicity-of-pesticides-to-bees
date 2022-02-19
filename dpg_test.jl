@@ -1,13 +1,12 @@
 ### A Pluto.jl notebook ###
-# v0.17.7
+# v0.18.0
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ bf8ebdce-8205-11ec-03fb-e1bf1962f1db
 begin
-	import Pkg
-	using Graphs, MolecularGraph, PlutoUI, MetaGraphs, Test, ProgressMeter
+	using Graphs, MolecularGraph, PlutoUI, MetaGraphs, Test
 	include(joinpath(pwd(), "src", "RWK.jl"))
 end
 
@@ -15,7 +14,7 @@ end
 md"## molecule A"
 
 # ╔═╡ d43e8c2e-2cd0-4665-8062-4984d7e61467
-mol_a = smilestomol("C=O") # formaldehyde
+mol_a = smilestomol("C(C=O)F") # Fluoroacetaldehyde
 
 # ╔═╡ f9648d02-ef71-4088-a856-1dba0d9923ea
 atomsymbol(mol_a)
@@ -30,7 +29,7 @@ bondorder(mol_a)
 md"### molecule B"
 
 # ╔═╡ b58edd49-3099-4d47-a157-e120f236cb7f
-mol_b = smilestomol("CC(=O)O") # acetic acid
+mol_b = smilestomol("C(C(=O)O)F") # Fluoroacetic acid
 
 # ╔═╡ 9cef736b-68cc-4aec-b730-5a61a46db535
 atomsymbol(mol_b)
@@ -45,17 +44,19 @@ bondorder(mol_b)
 md"### AxB"
 
 # ╔═╡ ccd5afc0-2d9c-4d32-be5a-d52ceebf9321
-dpg = RWK.direct_product_graph(mol_a, mol_b)
+dpg = RWK.direct_product_graph(mol_a, mol_b, store_vertex_pair=true)
 
 # ╔═╡ f8d16114-5d82-4dc0-b6a3-093adf23aa62
-@test nv(dpg) == 4
+@test nv(dpg) == 7
 
 # ╔═╡ f71f761b-203b-4e57-8ac7-960ac38db257
-@test ne(dpg) == 1
+@test ne(dpg) == 4
 
 # ╔═╡ fc0290ba-43d0-4cbe-9745-a5cc338e4011
+with_terminal() do
 for v in vertices(dpg)
 	println("v ", " prop = ", get_prop(dpg, v, :vertex_pair))
+end
 end
 
 # ╔═╡ eaad4098-3c38-4d78-9854-2199f559276a
@@ -78,9 +79,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 MetaGraphs = "626554b9-1ddb-594c-aa3c-2596fe9399a5"
 MolecularGraph = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
-Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
@@ -88,14 +87,13 @@ Graphs = "~1.5.1"
 MetaGraphs = "~0.7.1"
 MolecularGraph = "~0.11.0"
 PlutoUI = "~0.7.33"
-ProgressMeter = "~1.7.1"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.1"
+julia_version = "1.7.2"
 manifest_format = "2.0"
 
 [[deps.AbstractPlutoDingetjes]]
@@ -342,12 +340,6 @@ version = "1.2.3"
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
-
-[[deps.ProgressMeter]]
-deps = ["Distributed", "Printf"]
-git-tree-sha1 = "afadeba63d90ff223a6a48d2009434ecee2ec9e8"
-uuid = "92933f4c-e287-5a05-a399-4b506db050ca"
-version = "1.7.1"
 
 [[deps.PropertyDicts]]
 git-tree-sha1 = "429d887daee312e73842cabe6b122e310b72e25d"
