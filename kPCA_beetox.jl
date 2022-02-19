@@ -1,28 +1,31 @@
 ### A Pluto.jl notebook ###
-# v0.17.7
+# v0.18.0
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ 985381fb-0f41-446a-869d-2ad8736b9403
-using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, UMAP, ColorSchemes, ScikitLearn, MolecularGraph
+using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, UMAP, ColorSchemes, ScikitLearn, MolecularGraph, ManifoldLearning
 
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
-md"k-PCA on beetox data"
+md"# dim reduction beetox"
 
 # ╔═╡ 0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
-set_theme!(theme_light()); update_theme!(fontsize=20)
+begin
+	set_theme!(theme_light()); update_theme!(fontsize=20)
+	colors = Dict("Toxic"    => ColorSchemes.Dark2_3[3], 
+		          "Nontoxic" => ColorSchemes.Dark2_3[1])
+	markers = Dict("Toxic"    => :x,
+		           "Nontoxic" => :circle)
+end
 
 # ╔═╡ 20fc87e4-c1ee-468c-ba2c-1dd65606df34
 begin
-	p = 0.05 # parameter in random walk graph kernel
-	# p = 1
 	kernel = "grw_kernel"
+	p = 0.05 # γ
 	# kernel = "fixed_length_rw_kernel"
-end
+	# p = 3 # ℓ
 
-# ╔═╡ 8eea0158-f192-4069-bc85-f0e2569dad6e
-begin
 	include_hydrogens = false
 	data_dir = "include_hydrogens_$include_hydrogens"
 end
@@ -36,16 +39,14 @@ begin
 	toxicity  = load(jldfilename, "toxicity")
 	Kcentered = load(jldfilename, "Kcentered")
 	K         = load(jldfilename, "K")
+
+	id_outliers = []# [231]
+	ids_keep  = [i for i = 1:length(mols) if ! (i in id_outliers)]
+	mols      = mols[ids_keep]
+	toxicity  = toxicity[ids_keep]
+	K         = K[ids_keep, ids_keep]
+	Kcentered = Kcentered[ids_keep, ids_keep]
 end
-
-# ╔═╡ 5b256141-1995-40bb-9d7b-60fafcec6c90
-colors = Dict("Toxic"    => ColorSchemes.Dark2_3[3], 
-	          "Nontoxic" => ColorSchemes.Dark2_3[1])
-
-# ╔═╡ 22a66b19-9a1a-4c24-8aa8-0689a10d1f67
-markers = Dict("Toxic"    => :x,
-	           "Nontoxic" => :circle
-)
 
 # ╔═╡ e7d27e90-1fa1-4b27-af7d-b4282d799566
 eigen(Kcentered)
@@ -133,40 +134,28 @@ end
 # ╔═╡ 3b530821-dde7-4bd6-a76c-6a915a016af3
 md"## try diffusion maps instead"
 
-# ╔═╡ d8741e08-587e-4477-bcfb-db3dcab9bb23
-function diff_map(maxoutdim::Int)
-	# normalize rows to interpret as transition probabilities
-	D = diagm(vec(sum(K, dims=2)))
-	M = inv(D) * K # laplacian matrix
-
-	F = eigen(M, permute=false, scale=false)
-    λ = real.(F.values)
-    idx = sortperm(λ, rev=true)[2:maxoutdim+1]
-    λ = λ[idx]
-    V = real.(F.vectors[:, idx])
-    Y = λ .* V'
-end
-
-# ╔═╡ fdfbdeb5-71ec-4606-bbef-c33ed4177f8d
-embedding_dmap = diff_map(2)
+# ╔═╡ 38ca6ed1-1a71-4082-a080-96a9de9d360e
+diff_map = fit(DiffMap, K; kernel=nothing, maxoutdim=2)
 
 # ╔═╡ a6108c2e-e089-49ad-abf8-31fd6a80374a
 begin
 	f3 = Figure(resolution=(900, 900))
 	Axis(f3[1, 1], 
-		xlabel="diff map dim. 1", 
-		ylabel="diff map dim. 2", 
-		aspect=DataAspect(),
-		title="latent space of pesticides"
+		 xlabel="diff map dim. 1", 
+		 ylabel="diff map dim. 2", 
+		 aspect=DataAspect(),
+		 title="latent space of pesticides"
 	)
 	# sc2 = scatter!(embedding_dmap[1, :], embedding_dmap[2, :], color=nb_atoms)
 	# Colorbar(f3[1, 2], sc2, label="# atoms")
 	for l in ["Toxic", "Nontoxic"]
-	    scatter!(embedding_dmap[1, toxicity .== l], 
-			     embedding_dmap[2, toxicity .== l], 
-			label=l, strokewidth=2, color=(:white, 0.0), 
-			strokecolor=colors[l],
-			marker=markers[l]
+	    scatter!(diff_map.proj[1, toxicity .== l], 
+			     diff_map.proj[2, toxicity .== l], 
+			     label=l, strokewidth=2, 
+			     color=(:white, 0.0), 
+			     # color=nb_atoms[toxicity .== l],
+			     strokecolor=colors[l],
+			     marker=markers[l]
 		)
 	end
 	axislegend()
@@ -182,6 +171,7 @@ ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+ManifoldLearning = "06eb3307-b2af-5a2a-abea-d33192699d32"
 MolecularGraph = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
 ScikitLearn = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
 UMAP = "c4f8c510-2410-5be4-91d7-4fbaeb39457e"
@@ -192,6 +182,7 @@ CairoMakie = "~0.7.2"
 ColorSchemes = "~3.16.0"
 DataFrames = "~1.3.2"
 JLD2 = "~0.4.19"
+ManifoldLearning = "~0.7.0"
 MolecularGraph = "~0.11.0"
 ScikitLearn = "~0.6.4"
 UMAP = "~0.1.9"
@@ -354,6 +345,11 @@ deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
 git-tree-sha1 = "417b0ed7b8b838aa6ca0a87aadf1bb9eb111ce40"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.8"
+
+[[deps.Combinatorics]]
+git-tree-sha1 = "08c8b6831dc00bfea825826be0bc8336fc369860"
+uuid = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
+version = "1.0.2"
 
 [[deps.CommonSubexpressions]]
 deps = ["MacroTools", "Test"]
@@ -609,6 +605,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "344bf40dcab1073aca04aa0df4fb092f920e4011"
 uuid = "3b182d85-2403-5c21-9c21-1e1f0cc25472"
 version = "1.3.14+0"
+
+[[deps.Graphs]]
+deps = ["ArnoldiMethod", "Compat", "DataStructures", "Distributed", "Inflate", "LinearAlgebra", "Random", "SharedArrays", "SimpleTraits", "SparseArrays", "Statistics"]
+git-tree-sha1 = "57c021de207e234108a6f1454003120a1bf350c4"
+uuid = "86223c79-3864-5bf0-83f7-82e725a168b6"
+version = "1.6.0"
 
 [[deps.GridLayoutBase]]
 deps = ["GeometryBasics", "InteractiveUtils", "Observables"]
@@ -887,6 +889,12 @@ git-tree-sha1 = "c5fb1bfac781db766f9e4aef96adc19a729bc9b2"
 uuid = "20f20a25-4f0e-4fdf-b5d1-57303727442b"
 version = "0.2.1"
 
+[[deps.ManifoldLearning]]
+deps = ["Combinatorics", "Graphs", "LinearAlgebra", "MultivariateStats", "Random", "SparseArrays", "Statistics", "StatsAPI"]
+git-tree-sha1 = "110a96a0cf47ffe6989e25144072d8d2bd7d113c"
+uuid = "06eb3307-b2af-5a2a-abea-d33192699d32"
+version = "0.7.0"
+
 [[deps.MappedArrays]]
 git-tree-sha1 = "e8b359ef06ec72e8c030463fe02efe5527ee5142"
 uuid = "dbb5928d-eab1-5f90-85c2-b9b0edb7c900"
@@ -934,6 +942,12 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
+
+[[deps.MultivariateStats]]
+deps = ["Arpack", "LinearAlgebra", "SparseArrays", "Statistics", "StatsBase"]
+git-tree-sha1 = "6d019f5a0465522bbfdd68ecfad7f86b535d6935"
+uuid = "6f286f6a-111f-5878-ab1e-185364afe411"
+version = "0.9.0"
 
 [[deps.NLSolversBase]]
 deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
@@ -1582,10 +1596,7 @@ version = "3.5.0+0"
 # ╠═985381fb-0f41-446a-869d-2ad8736b9403
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 # ╠═20fc87e4-c1ee-468c-ba2c-1dd65606df34
-# ╠═8eea0158-f192-4069-bc85-f0e2569dad6e
 # ╠═008f0df9-5cdb-449d-a837-3d808536d30a
-# ╠═5b256141-1995-40bb-9d7b-60fafcec6c90
-# ╠═22a66b19-9a1a-4c24-8aa8-0689a10d1f67
 # ╠═e7d27e90-1fa1-4b27-af7d-b4282d799566
 # ╠═cdb19544-f3eb-4845-99de-9a2fcc49ed4b
 # ╠═6f2efe6a-1d89-44d4-97df-5dbef934308a
@@ -1596,8 +1607,7 @@ version = "3.5.0+0"
 # ╠═ea3b198f-d184-4209-867d-00ec229d8299
 # ╠═b396b0b8-607b-46f5-9ab2-60d37ae13c71
 # ╟─3b530821-dde7-4bd6-a76c-6a915a016af3
-# ╠═d8741e08-587e-4477-bcfb-db3dcab9bb23
-# ╠═fdfbdeb5-71ec-4606-bbef-c33ed4177f8d
+# ╠═38ca6ed1-1a71-4082-a080-96a9de9d360e
 # ╠═a6108c2e-e089-49ad-abf8-31fd6a80374a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
