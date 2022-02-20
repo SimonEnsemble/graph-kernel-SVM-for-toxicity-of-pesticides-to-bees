@@ -8,7 +8,7 @@ using InteractiveUtils
 using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI
 
 # ╔═╡ 7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
-using ScikitLearn.CrossValidation: train_test_split, KFold
+using ScikitLearn.CrossValidation: train_test_split, StratifiedKFold, KFold
 
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 md"# k-SVM on beetox data"
@@ -28,19 +28,17 @@ begin
 		           "Nontoxic" => :circle)
 	colors = Dict("Toxic"    => ColorSchemes.Dark2_3[3], 
 				  "Nontoxic" => ColorSchemes.Dark2_3[1])
+	class_to_int = Dict("Toxic" => 1, "Nontoxic" => -1)
 end
 
 # ╔═╡ 70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
 begin
+	data_dir = "gram_matrices"
+	
 	kernel = "fixed_length_rw_kernel"
-	# kernel_params = [0.01, 0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001]  # γ
-	kernel_params = [1, 2, 3, 4, 5, 6, 7, 8] # l
-end
-
-# ╔═╡ f8679dae-8322-4f3d-986b-8d857c29ff2d
-begin
-	include_hydrogens = false
-	data_dir = "include_hydrogens_$include_hydrogens"
+	kernel_params = [1, 2, 3, 4, 5, 6] # l
+	# kernel = "grw_kernel"
+	# kernel_params = [0.05, 0.04, 0.03, 0.02, 0.01] # γ
 end
 
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
@@ -59,7 +57,26 @@ begin
 end
 
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
-y = map(t -> t == "Toxic" ? 1 : 0, toxicity) # 1 = toxic
+y = map(t -> class_to_int[t], toxicity)
+
+# ╔═╡ 9a6ce760-5da6-4c7e-9100-cd6676949bb1
+function viz_class_distn(y)
+	int_to_class = Dict([i => l for (l, i) in class_to_int])
+		
+	fig = Figure()
+	ax  = Axis(fig[1, 1], 
+		       xlabel="label", 
+		       ylabel="# molecules",   
+		       title="class distribution",
+			   xticks=(1:2, [int_to_class[l] for l in unique(y)])
+	)
+	barplot!(1:2, [sum(y .== l) for l in unique(y)], 
+		     color=[colors[int_to_class[l]] for l in unique(y)])
+	fig
+end
+
+# ╔═╡ e22a6f2b-053c-42e0-9f24-6ecd8b16fcf7
+viz_class_distn(y)
 
 # ╔═╡ 14d49e19-92e2-4127-9224-35d09e852447
 function train_svm(K_train::Matrix, y_train::Vector, C::Float64)
@@ -70,7 +87,7 @@ function train_svm(K_train::Matrix, y_train::Vector, C::Float64)
 	K_train_centered = tf.transform(K_train)
 
 	# train suppor vector classifier
-	svc = SVC(kernel="precomputed", C=C)
+	svc = SVC(kernel="precomputed", C=C, class_weight="balanced")
 	svc.fit(K_train_centered, y_train)
 
 	return svc, tf
@@ -78,11 +95,11 @@ end
 
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
-	n_folds = 5
-	ids_cv, ids_test = train_test_split(1:length(y), test_size=0.2)
+	n_folds = 3
+	ids_cv, ids_test = train_test_split(1:length(y), test_size=0.25)
 	kf = KFold(length(ids_cv), n_folds=n_folds, shuffle=true)
 
-	Cs = 10 .^ range(-5, 1, length=10)
+	Cs = 10 .^ range(-5, 1, length=15)
 	
 	scores = zeros(length(kernel_params), length(Cs))
 	for i = 1:length(kernel_params)
@@ -1495,9 +1512,10 @@ version = "3.5.0+0"
 # ╠═efd8a5de-82f4-4255-9982-ff866937261f
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 # ╠═70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
-# ╠═f8679dae-8322-4f3d-986b-8d857c29ff2d
 # ╠═008f0df9-5cdb-449d-a837-3d808536d30a
 # ╠═119ffdca-7f51-4e71-b825-843da6a75413
+# ╠═9a6ce760-5da6-4c7e-9100-cd6676949bb1
+# ╠═e22a6f2b-053c-42e0-9f24-6ecd8b16fcf7
 # ╠═14d49e19-92e2-4127-9224-35d09e852447
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
 # ╠═b9f49c8a-7cdd-4f8b-bd02-6f620325e281

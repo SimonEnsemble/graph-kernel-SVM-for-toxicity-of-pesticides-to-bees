@@ -5,10 +5,10 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 985381fb-0f41-446a-869d-2ad8736b9403
-using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, UMAP, ColorSchemes, ScikitLearn, MolecularGraph, ManifoldLearning
+using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, MolecularGraph, ManifoldLearning, PlutoUI
 
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
-md"# dim reduction beetox"
+md"# diffusion map to embed molecules into latent space"
 
 # ╔═╡ 0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 begin
@@ -26,8 +26,7 @@ begin
 	# kernel = "fixed_length_rw_kernel"
 	# p = 3 # ℓ
 
-	include_hydrogens = false
-	data_dir = "include_hydrogens_$include_hydrogens"
+	data_dir = "gram_matrices"
 end
 
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
@@ -40,7 +39,7 @@ begin
 	Kcentered = load(jldfilename, "Kcentered")
 	K         = load(jldfilename, "K")
 
-	id_outliers = []# [231]
+	id_outliers = [231]
 	ids_keep  = [i for i = 1:length(mols) if ! (i in id_outliers)]
 	mols      = mols[ids_keep]
 	toxicity  = toxicity[ids_keep]
@@ -48,110 +47,37 @@ begin
 	Kcentered = Kcentered[ids_keep, ids_keep]
 end
 
-# ╔═╡ e7d27e90-1fa1-4b27-af7d-b4282d799566
-eigen(Kcentered)
-
-# ╔═╡ cdb19544-f3eb-4845-99de-9a2fcc49ed4b
-begin
-	# eigen-decomposition of the Gram matrix
-	λ, V = eigen(Kcentered)
-	λ = reverse(λ) # sort lowest to highest eigenvalues
-	V = reverse(V, dims=2)
+# ╔═╡ a04e19f7-df6e-4d51-a5fd-b1855db580c4
+with_terminal() do
+	println("removing outliers: ", id_outliers)
 end
-
-# ╔═╡ 1f8030f3-a100-41de-a0f0-2edc4b198bfa
-# dimension of latent space
-L = findfirst(sqrt.([sum(λ[1:i])/sum(λ) for i = 1:length(λ)]) .> 0.99)
-
-# ╔═╡ 6f2efe6a-1d89-44d4-97df-5dbef934308a
-begin
-	# construct latent representations
-	V_L = V[:, 1:L]
-	Z = sqrt.(diagm(λ[1:L])) * transpose(V_L)
-end
-
-# ╔═╡ 29709f83-c2bf-4087-b9f1-5dfc357ddad5
-# UMAP
-if L > 2
-    embedding = umap(Z, 2, n_neighbors=10)
-elseif L == 2
-    embedding = Z
-end
-
-# ╔═╡ 62afcd46-e716-401f-ab39-21758dc5cca6
-begin
-	# show distribution of eigenvalues. 
-	f = Figure()
-	Axis(f[1,1], xlabel="index", ylabel="eigenvalue of K", title="scree plot")
-	barplot!(1:L, λ[1:L], 
-		color=ColorSchemes.Pastel2_3[1], label="keep")
-	barplot!((L+1):length(λ), λ[(L+1):end], 
-		color=ColorSchemes.Pastel2_3[2], label="discard")
-	axislegend()
-	# xlims!(0, nothing)
-	# ylims!(0, nothing)
-	save("eigenvalues.pdf", f)
-	f
-end
-
-# ╔═╡ 4e38c47d-2053-477d-8ce5-8dbfbed9bcc2
-begin
-	f1 = Figure()
-	Axis(f1[1, 1], 
-		xlabel="UMAP dim. 1", 
-		ylabel="UMAP dim. 2", 
-		aspect=DataAspect(),
-		title="latent space of pesticides"
-	)
-	for l in ["Toxic", "Nontoxic"]
-	    scatter!(embedding[1, toxicity .== l], embedding[2, toxicity .== l], 
-			label=l, strokewidth=2, color=(:white, 0.0), strokecolor=colors[l],
-			marker=markers[l]
-		)
-	end
-	axislegend()
-	save("embedding.pdf", f1)
-	f1
-end
-
-# ╔═╡ ea3b198f-d184-4209-867d-00ec229d8299
-nb_atoms = [length(atomsymbol(mol)) for mol in mols]
-
-# ╔═╡ b396b0b8-607b-46f5-9ab2-60d37ae13c71
-begin
-	f2 = Figure()
-	Axis(f2[1, 1], 
-		xlabel="UMAP dim. 1", 
-		ylabel="UMAP dim. 2", 
-		aspect=DataAspect(),
-		title="latent space of pesticides"
-	)
-	sc = scatter!(embedding[1, :], embedding[2, :], color=nb_atoms)
-	Colorbar(f2[1, 2], sc, label="# atoms")
-	f2
-end
-
-# ╔═╡ 3b530821-dde7-4bd6-a76c-6a915a016af3
-md"## try diffusion maps instead"
 
 # ╔═╡ 38ca6ed1-1a71-4082-a080-96a9de9d360e
-diff_map = fit(DiffMap, K; kernel=nothing, maxoutdim=2)
+diff_map = fit(DiffMap, K; kernel=nothing, maxoutdim=2, α=0.0, t=3)
+
+# ╔═╡ 4d64d3c2-822a-45fd-a822-dd605bf144f3
+begin
+	x₁ = diff_map.proj[1, :]
+	x₂ = diff_map.proj[2, :]
+end
 
 # ╔═╡ a6108c2e-e089-49ad-abf8-31fd6a80374a
 begin
-	f3 = Figure(resolution=(900, 900))
-	Axis(f3[1, 1], 
+	fig = Figure(resolution=(900, 900))
+	Axis(fig[1, 1], 
 		 xlabel="diff map dim. 1", 
 		 ylabel="diff map dim. 2", 
 		 aspect=DataAspect(),
 		 title="latent space of pesticides"
 	)
-	# sc2 = scatter!(embedding_dmap[1, :], embedding_dmap[2, :], color=nb_atoms)
+	# # color by number of atoms to make sure embedding isn't trivial.
+	# sc2 = scatter!(x₁, x₂, color=[length(atomsymbol(mol)) for mol in mols])
 	# Colorbar(f3[1, 2], sc2, label="# atoms")
-	for l in ["Toxic", "Nontoxic"]
-	    scatter!(diff_map.proj[1, toxicity .== l], 
-			     diff_map.proj[2, toxicity .== l], 
-			     label=l, strokewidth=2, 
+	for l in ["Nontoxic", "Toxic"]
+	    scatter!(x₁[toxicity .== l], 
+			     x₂[toxicity .== l], 
+			     label=l, 
+			     strokewidth=2, 
 			     color=(:white, 0.0), 
 			     # color=nb_atoms[toxicity .== l],
 			     strokecolor=colors[l],
@@ -159,7 +85,7 @@ begin
 		)
 	end
 	axislegend()
-	f3
+	fig
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -173,8 +99,8 @@ JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 ManifoldLearning = "06eb3307-b2af-5a2a-abea-d33192699d32"
 MolecularGraph = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 ScikitLearn = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
-UMAP = "c4f8c510-2410-5be4-91d7-4fbaeb39457e"
 
 [compat]
 CSV = "~0.10.2"
@@ -184,8 +110,8 @@ DataFrames = "~1.3.2"
 JLD2 = "~0.4.19"
 ManifoldLearning = "~0.7.0"
 MolecularGraph = "~0.11.0"
+PlutoUI = "~0.7.34"
 ScikitLearn = "~0.6.4"
-UMAP = "~0.1.9"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -200,6 +126,12 @@ deps = ["ChainRulesCore", "LinearAlgebra"]
 git-tree-sha1 = "6f1d9bc1c08f9f4a8fa92e3ea3cb50153a1b40d4"
 uuid = "621f4979-c628-5d54-868e-fcf4e3e8185c"
 version = "1.1.0"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "8eaf9f1b4921132a4cff3f36a1d9ba923b14a481"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.1.4"
 
 [[deps.AbstractTrees]]
 git-tree-sha1 = "03e0550477d86222521d254b741d470ba17ea0b5"
@@ -351,12 +283,6 @@ git-tree-sha1 = "08c8b6831dc00bfea825826be0bc8336fc369860"
 uuid = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 version = "1.0.2"
 
-[[deps.CommonSubexpressions]]
-deps = ["MacroTools", "Test"]
-git-tree-sha1 = "7b8a93dba8af7e3b42fecabf646260105ac373f7"
-uuid = "bbf7d656-a473-5ed7-a52c-81e309532950"
-version = "0.3.0"
-
 [[deps.Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "SHA", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
 git-tree-sha1 = "44c37b4636bc54afac5c574d2d02b625349d6582"
@@ -419,24 +345,6 @@ deps = ["InverseFunctions", "Test"]
 git-tree-sha1 = "80c3e8639e3353e5d2912fb3a1916b8455e2494b"
 uuid = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
 version = "0.4.0"
-
-[[deps.DiffResults]]
-deps = ["StaticArrays"]
-git-tree-sha1 = "c18e98cba888c6c25d1c3b048e4b3380ca956805"
-uuid = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
-version = "1.0.3"
-
-[[deps.DiffRules]]
-deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialFunctions"]
-git-tree-sha1 = "dd933c4ef7b4c270aacd4eb88fa64c147492acf0"
-uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
-version = "1.10.0"
-
-[[deps.Distances]]
-deps = ["LinearAlgebra", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "3258d0659f812acde79e8a74b11f17ac06d0ca04"
-uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
-version = "0.10.7"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -518,12 +426,6 @@ git-tree-sha1 = "4c7d3757f3ecbcb9055870351078552b7d1dbd2d"
 uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
 version = "0.13.0"
 
-[[deps.FiniteDiff]]
-deps = ["ArrayInterface", "LinearAlgebra", "Requires", "SparseArrays", "StaticArrays"]
-git-tree-sha1 = "ec299fdc8f49ae450807b0cb1d161c6b76fd2b60"
-uuid = "6a86dc24-6348-571c-b903-95158fe2bd41"
-version = "2.10.1"
-
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
 git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
@@ -541,12 +443,6 @@ deps = ["Printf"]
 git-tree-sha1 = "8339d61043228fdd3eb658d86c926cb282ae72a8"
 uuid = "59287772-0a20-5a39-b81b-1366585eb4c0"
 version = "0.4.2"
-
-[[deps.ForwardDiff]]
-deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions", "StaticArrays"]
-git-tree-sha1 = "1bd6fc0c344fc0cbee1f42f8d2e7ec8253dda2d2"
-uuid = "f6369f11-7733-5829-9624-2563aa707210"
-version = "0.10.25"
 
 [[deps.FreeType]]
 deps = ["CEnum", "FreeType2_jll"]
@@ -628,6 +524,23 @@ deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll",
 git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+1"
+
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "8d511d5b81240fc8e6802386302675bdf47737b9"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.4"
+
+[[deps.HypertextLiteral]]
+git-tree-sha1 = "2b078b5a615c6c0396c77810d92ee8c6f470d238"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.3"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "f7be53659ab06ddc986428d3a9dcc95f6fa6705a"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.2"
 
 [[deps.IfElse]]
 git-tree-sha1 = "debdd00ffef04665ccbb3e150747a77560e8fad1"
@@ -840,12 +753,6 @@ git-tree-sha1 = "7f3efec06033682db852f8b3bc3c1d2b0a0ab066"
 uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
 version = "2.36.0+0"
 
-[[deps.LightGraphs]]
-deps = ["ArnoldiMethod", "DataStructures", "Distributed", "Inflate", "LinearAlgebra", "Random", "SharedArrays", "SimpleTraits", "SparseArrays", "Statistics"]
-git-tree-sha1 = "432428df5f360964040ed60418dd5601ecd240b6"
-uuid = "093fc24a-ae57-5d10-9952-331d41423f4d"
-version = "1.3.5"
-
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -858,12 +765,6 @@ version = "0.3.6"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
-
-[[deps.LsqFit]]
-deps = ["Distributions", "ForwardDiff", "LinearAlgebra", "NLSolversBase", "OptimBase", "Random", "StatsBase"]
-git-tree-sha1 = "91aa1442e63a77f101aff01dec5a821a17f43922"
-uuid = "2fda8390-95c7-5789-9bda-21331edee243"
-version = "0.12.1"
 
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "Pkg"]
@@ -949,22 +850,10 @@ git-tree-sha1 = "6d019f5a0465522bbfdd68ecfad7f86b535d6935"
 uuid = "6f286f6a-111f-5878-ab1e-185364afe411"
 version = "0.9.0"
 
-[[deps.NLSolversBase]]
-deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
-git-tree-sha1 = "50310f934e55e5ca3912fb941dec199b49ca9b68"
-uuid = "d41bc354-129a-5804-8e4c-c37616107c6c"
-version = "7.8.2"
-
 [[deps.NaNMath]]
 git-tree-sha1 = "b086b7ea07f8e38cf122f5016af580881ac914fe"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "0.3.7"
-
-[[deps.NearestNeighborDescent]]
-deps = ["DataStructures", "Distances", "LightGraphs", "Random", "Reexport", "SparseArrays"]
-git-tree-sha1 = "8f41eced4332166c3548bda137779c38975ac4af"
-uuid = "dd2c4c9e-a32f-5b2f-b342-08c2f244fce8"
-version = "0.3.5"
 
 [[deps.Netpbm]]
 deps = ["FileIO", "ImageCore"]
@@ -1028,12 +917,6 @@ deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pk
 git-tree-sha1 = "13652491f6856acfd2db29360e1bbcd4565d04f1"
 uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
 version = "0.5.5+0"
-
-[[deps.OptimBase]]
-deps = ["NLSolversBase", "Printf", "Reexport"]
-git-tree-sha1 = "9cb1fee807b599b5f803809e85c81b582d2009d6"
-uuid = "87e2bd06-a317-5318-96d9-3ecbac512eee"
-version = "2.0.2"
 
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1115,6 +998,12 @@ deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "Stat
 git-tree-sha1 = "6f1b25e8ea06279b5689263cc538f51331d7ca17"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
 version = "1.1.3"
+
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
+git-tree-sha1 = "8979e9802b4ac3d58c503a20f2824ad67f9074dd"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.34"
 
 [[deps.PolygonOps]]
 git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
@@ -1401,12 +1290,6 @@ git-tree-sha1 = "216b95ea110b5972db65aa90f88d8d89dcb8851c"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.9.6"
 
-[[deps.UMAP]]
-deps = ["Arpack", "Distances", "LinearAlgebra", "LsqFit", "NearestNeighborDescent", "Random", "SparseArrays"]
-git-tree-sha1 = "2a6991639e93fcbbdb8a0476b521a6ac9700ee97"
-uuid = "c4f8c510-2410-5be4-91d7-4fbaeb39457e"
-version = "0.1.9"
-
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
@@ -1597,17 +1480,9 @@ version = "3.5.0+0"
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 # ╠═20fc87e4-c1ee-468c-ba2c-1dd65606df34
 # ╠═008f0df9-5cdb-449d-a837-3d808536d30a
-# ╠═e7d27e90-1fa1-4b27-af7d-b4282d799566
-# ╠═cdb19544-f3eb-4845-99de-9a2fcc49ed4b
-# ╠═6f2efe6a-1d89-44d4-97df-5dbef934308a
-# ╠═1f8030f3-a100-41de-a0f0-2edc4b198bfa
-# ╠═29709f83-c2bf-4087-b9f1-5dfc357ddad5
-# ╠═62afcd46-e716-401f-ab39-21758dc5cca6
-# ╠═4e38c47d-2053-477d-8ce5-8dbfbed9bcc2
-# ╠═ea3b198f-d184-4209-867d-00ec229d8299
-# ╠═b396b0b8-607b-46f5-9ab2-60d37ae13c71
-# ╟─3b530821-dde7-4bd6-a76c-6a915a016af3
+# ╠═a04e19f7-df6e-4d51-a5fd-b1855db580c4
 # ╠═38ca6ed1-1a71-4082-a080-96a9de9d360e
+# ╠═4d64d3c2-822a-45fd-a822-dd605bf144f3
 # ╠═a6108c2e-e089-49ad-abf8-31fd6a80374a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

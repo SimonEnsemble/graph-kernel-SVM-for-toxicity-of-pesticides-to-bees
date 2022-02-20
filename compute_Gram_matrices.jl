@@ -5,16 +5,15 @@ using Distributed, SharedArrays, JLD2, MolecularGraph, CSV, DataFrames, Progress
 #=
 settings
 =#
-include_hydrogens = false
 kernel = fixed_length_rw_kernel
-params = [1, 2, 3, 4] # l's
+params = [1, 2, 3, 4, 5, 6, 7, 8] # l's
 # kernel = grw_kernel
 # params = [0.05, 0.04, 0.03, 0.02, 0.01], # γ's
 
-println("settings:\n\tkernel = ", kernel, "\n\tinclude_hydrogens = ", include_hydrogens)
+println("settings:\n\tkernel = ", kernel)
 
 # set up directory for storing data
-savedir = "include_hydrogens_$include_hydrogens"
+savedir = "gram_matrices"
 if ! isdir(savedir)
    mkdir(savedir)
 end
@@ -26,10 +25,10 @@ convert SMILES to graphs
 data = CSV.read("new_smiles.csv", DataFrame)
 toxicity = data[:, "Outcome"] # targets
 
-mols = [smilestomol(smiles) for smiles in data[:, "SMILES"]]
-if include_hydrogens
-	mols = addhydrogens.(mols)
-end
+mols = [smilestomol(smiles) for smiles in data[:, "SMILES"]] # no hydrogen's included.
+#if include_hydrogens
+#	mols = addhydrogens.(mols)
+#end
 
 #=
  compute Gram matrix for the different kernel params
