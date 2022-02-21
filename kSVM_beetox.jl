@@ -17,6 +17,8 @@ md"# k-SVM on beetox data"
 begin
 	@sk_import svm : SVC
 	@sk_import metrics: confusion_matrix
+	@sk_import metrics: precision_score
+	@sk_import metrics: recall_score
 	@sk_import preprocessing: KernelCenterer
 end
 
@@ -29,6 +31,7 @@ begin
 	colors = Dict("Toxic"    => ColorSchemes.Dark2_3[3], 
 				  "Nontoxic" => ColorSchemes.Dark2_3[1])
 	class_to_int = Dict("Toxic" => 1, "Nontoxic" => -1)
+	int_to_class = Dict([i => l for (l, i) in class_to_int])
 end
 
 # ╔═╡ 70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
@@ -36,9 +39,12 @@ begin
 	data_dir = "gram_matrices"
 	
 	kernel = "fixed_length_rw_kernel"
-	kernel_params = [1, 2, 3, 4, 5, 6] # l
+	kernel_params = [1, 2, 3, 4, 5, 6, 7, 8] # l
 	# kernel = "grw_kernel"
 	# kernel_params = [0.05, 0.04, 0.03, 0.02, 0.01] # γ
+
+	kernel_param_name = Dict("fixed_length_rw_kernel" => "walk length, ℓ",
+		                     "grw_kernel" => "γ")
 end
 
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
@@ -60,9 +66,7 @@ end
 y = map(t -> class_to_int[t], toxicity)
 
 # ╔═╡ 9a6ce760-5da6-4c7e-9100-cd6676949bb1
-function viz_class_distn(y)
-	int_to_class = Dict([i => l for (l, i) in class_to_int])
-		
+function viz_class_distn(y)	
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		       xlabel="label", 
@@ -138,13 +142,6 @@ begin
 	acc = svc.score(K_test_centered, y[ids_test])
 end
 
-# ╔═╡ 983261c6-1b1e-42a0-a92d-db85741ec89d
-with_terminal() do
-	println("opt C = ", C_opt)
-	println("opt kernel param = ", kernel_params[id_opt_kernel_param])
-	println("test set accuracy = ", round(acc, digits=2))
-end
-
 # ╔═╡ aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
 function viz_validation_results(kernel_params, Cs, val_scores)
 	cmap = ColorSchemes.linear_green_5_95_c69_n256
@@ -153,7 +150,7 @@ function viz_validation_results(kernel_params, Cs, val_scores)
 
 	ax = Axis(fig[1, 1], 
 			  xlabel="C",
-			  ylabel="kernel param",
+			  ylabel=kernel_param_name[kernel],
 		      aspect=length(Cs) / length(kernel_params),
 			  xticks=(1:length(Cs), 
 			          ["$(round(C, digits=4))" for C in Cs]),
@@ -175,6 +172,17 @@ viz_validation_results(kernel_params, Cs, scores)
 # ╔═╡ cc621b0f-9991-4c91-bb98-e6e4aa1f90cf
 y_pred = svc.predict(K_test_centered)
 
+# ╔═╡ 983261c6-1b1e-42a0-a92d-db85741ec89d
+with_terminal() do
+	println("opt C = ", C_opt)
+	println("opt kernel param = ", kernel_params[id_opt_kernel_param])
+	println("test set performance metrics:")
+	println("\taccuracy = ", round(acc, digits=2))
+	@assert int_to_class[1] == "Toxic"
+	println("\trecall = ", round(recall_score(y[ids_test], y_pred), digits=2))
+	println("\tprecision = ", round(precision_score(y[ids_test], y_pred), digits=2))
+end
+
 # ╔═╡ c3d4aad5-b5ac-42c7-bcd9-7cf6d3397605
 cm = confusion_matrix(y[ids_test], y_pred)
 
@@ -186,7 +194,7 @@ function viz_confusion_matrix(cm::Matrix{Int64}, class_list::Vector{String})
     fig = Figure()
     ax = Axis(fig[1, 1],
               xticks=([1, 2], class_list),
-              yticks=([1, 2], class_list),
+              yticks=([1, 2], reverse(class_list)),
               ylabel="truth",
               xlabel="prediction"
     )
@@ -202,7 +210,18 @@ function viz_confusion_matrix(cm::Matrix{Int64}, class_list::Vector{String})
 end
 
 # ╔═╡ 4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
-viz_confusion_matrix(cm, ["non-toxic", "toxic"])
+viz_confusion_matrix(cm, [int_to_class[-1], int_to_class[1]])
+
+# ╔═╡ 11c070a4-b677-4ab8-a512-822f8e440548
+with_terminal() do
+	println("to check cm...")
+	for c in ["Toxic", "Nontoxic"]
+		println("\t# true $c in test set = ", 
+			sum(y[ids_test] .== class_to_int[c]))
+		println("\t# pred $c in test set = ", 
+			sum(y_pred .== class_to_int[c]))
+	end
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1528,5 +1547,6 @@ version = "3.5.0+0"
 # ╠═c3d4aad5-b5ac-42c7-bcd9-7cf6d3397605
 # ╠═8d2dd082-b587-4bcc-9b5a-cf38375927ba
 # ╠═4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
+# ╠═11c070a4-b677-4ab8-a512-822f8e440548
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
