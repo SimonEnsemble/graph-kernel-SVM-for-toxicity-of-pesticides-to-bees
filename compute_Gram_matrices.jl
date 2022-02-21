@@ -1,5 +1,5 @@
-@everywhere push!(LOAD_PATH, joinpath(pwd(), "src"))
 using Distributed, SharedArrays, JLD2, MolecularGraph, CSV, DataFrames, ProgressMeter
+@everywhere push!(LOAD_PATH, joinpath(pwd(), "src"))
 @everywhere using RWK
 
 #=
@@ -8,7 +8,7 @@ settings
 # kernel = fixed_length_rw_kernel
 # params = [1, 2, 3, 4, 5, 6, 7, 8] # l's
 kernel = grw_kernel
-params = [0.05, 0.04, 0.03, 0.02, 0.01] # γ's
+params = [0.06, 0.05, 0.04, 0.03, 0.02, 0.01] # γ's
 
 println("settings:\n\tkernel = ", kernel)
 
