@@ -1,11 +1,11 @@
 module RWK
 
-using Graphs, MolecularGraph, LinearAlgebra, MetaGraphs, ProgressMeter
+using Graphs, MolecularGraph, LinearAlgebra, MetaGraphs, Xtals, Colors
 
 export direct_product_graph, grw_kernel, fixed_point_grw_kernel, centered_Gram_matrix, fixed_length_rw_kernel
 
 # for GraphMol, need to confirm if the bond has the same order
-function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=false, store_vertex_pair::Bool=false)
+function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=false, store_vertex_pair::Bool=false, store_colors::Bool=false)
     # unpack species, bond orders
     vertex_labels_a, vertex_labels_b = atomsymbol(mol_a), atomsymbol(mol_b)
     n_a, n_b = length(vertex_labels_a), length(vertex_labels_b)
@@ -33,6 +33,9 @@ function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=fa
                 ab_vertex_pair_to_axb_vertex[a, b] = nv(axb)
                 if store_vertex_pair
                     set_props!(axb, nv(axb), Dict(:vertex_pair => (a, b)))
+                end
+                if store_colors
+                    set_props!(axb, nv(axb), Dict(:vertex_color => RGB((Xtals.DEFAULT_CPK_COLORS[vertex_labels_a[a]] ./ 255)...)))
                 end
             end
         end
