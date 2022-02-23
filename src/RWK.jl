@@ -1,6 +1,6 @@
 module RWK
 
-using Graphs, MolecularGraph, LinearAlgebra, MetaGraphs, Xtals, Colors
+using Graphs, MolecularGraph, LinearAlgebra, MetaGraphs
 
 export direct_product_graph, grw_kernel, fixed_point_grw_kernel, centered_Gram_matrix, fixed_length_rw_kernel
 
@@ -37,7 +37,7 @@ function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol;
                     set_props!(axb, nv(axb), Dict(:vertex_pair => (a, b))) # store vertex pair into graph
                 end
                 if store_colors
-                    set_props!(axb, nv(axb), Dict(:vertex_color => RGB((Xtals.DEFAULT_CPK_COLORS[vertex_labels_a[a]] ./ 255)...))) # store color information for plotting
+                    set_props!(axb, nv(axb), Dict(:label => vertex_labels[a]))
                 end
             end
         end
