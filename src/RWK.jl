@@ -5,7 +5,9 @@ using Graphs, MolecularGraph, LinearAlgebra, MetaGraphs, Xtals, Colors
 export direct_product_graph, grw_kernel, fixed_point_grw_kernel, centered_Gram_matrix, fixed_length_rw_kernel
 
 # for GraphMol, need to confirm if the bond has the same order
-function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=false, store_vertex_pair::Bool=false, store_colors::Bool=false)
+function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; 
+                              verbose::Bool=false, store_vertex_pair::Bool=false, 
+                              store_colors::Bool=false, store_edge_labels::Bool=false)
     # unpack species, bond orders
     vertex_labels_a, vertex_labels_b = atomsymbol(mol_a), atomsymbol(mol_b)
     n_a, n_b = length(vertex_labels_a), length(vertex_labels_b)
@@ -32,10 +34,10 @@ function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=fa
                 add_vertex!(axb)
                 ab_vertex_pair_to_axb_vertex[a, b] = nv(axb)
                 if store_vertex_pair
-                    set_props!(axb, nv(axb), Dict(:vertex_pair => (a, b)))
+                    set_props!(axb, nv(axb), Dict(:vertex_pair => (a, b))) # store vertex pair into graph
                 end
                 if store_colors
-                    set_props!(axb, nv(axb), Dict(:vertex_color => RGB((Xtals.DEFAULT_CPK_COLORS[vertex_labels_a[a]] ./ 255)...)))
+                    set_props!(axb, nv(axb), Dict(:vertex_color => RGB((Xtals.DEFAULT_CPK_COLORS[vertex_labels_a[a]] ./ 255)...))) # store color information for plotting
                 end
             end
         end
@@ -72,6 +74,9 @@ function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=fa
             v2 = ab_vertex_pair_to_axb_vertex[a_2, b_2]
             if (v1 != 0) && (v2 != 0) # if v1 and v2 are vertices in axb...
                 add_edge!(axb, v1, v2)
+                if store_edge_labels
+                    set_props!(axb, ne(axb), Dict(:bondorder => edge_labels_a[e_a])) # store edge labels
+                end
             end
 
             # check candidate edge (v1, v2) in axb:
@@ -81,6 +86,9 @@ function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; verbose::Bool=fa
             v2 = ab_vertex_pair_to_axb_vertex[a_2, b_1]
             if (v1 != 0) && (v2 != 0) # if v1 and v2 are vertices in axb...
                 add_edge!(axb, v1, v2)
+                if store_edge_labels
+                    set_props!(axb, ne(axb), Dict(:bondorder => edge_labels_a[e_a])) # store edge labels
+                end
             end
         end
     end
