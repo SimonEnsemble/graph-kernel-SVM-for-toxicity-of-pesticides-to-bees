@@ -7,11 +7,28 @@ using InteractiveUtils
 # ╔═╡ 985381fb-0f41-446a-869d-2ad8736b9403
 using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI, StatsBase
 
-# ╔═╡ 7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
-using ScikitLearn.CrossValidation: train_test_split, StratifiedKFold, KFold
-
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 md"# k-SVM on beetox data"
+
+# ╔═╡ 7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
+import MLUtils: splitobs, kfolds, shuffleobs
+
+# ╔═╡ 9e354dc9-d973-41c9-870f-fccd4ea66a41
+function splitobs_stratified(;at, y::Array, shuffle::Bool=true)
+	n_splits = length(at) + 1
+	the_splits = [Int[] for s = 1:n_splits]
+	for label in unique(y)
+		ids_this_label = filter(i -> y[i] == label, 1:length(y))
+		if shuffle
+			ids_this_label = shuffleobs(ids_this_label)
+		end
+		split_this_label = splitobs(ids_this_label, at=at)
+		for s = 1:n_splits
+			the_splits[s] = vcat(the_splits[s], split_this_label[s])
+		end
+	end
+	return the_splits
+end
 
 # ╔═╡ efd8a5de-82f4-4255-9982-ff866937261f
 begin
@@ -100,9 +117,9 @@ end
 
 # ╔═╡ 6b7e4746-2f1b-4d17-850b-403e3b75c453
 function cv_run(K::Matrix{Float64}, y::Vector{Int},
-	            ids_cv::Vector{Int}, 
+	            ids_cv, 
 	            n_folds::Int, Cs::Vector{Float64})
-	kf = KFold(length(ids_cv), n_folds=n_folds, shuffle=true)
+	kf = kfolds(shuffleobs(1:length(ids_cv)), k=n_folds)
 
 	scores = zeros(length(Cs))
 	for (ids_cv_train, ids_cv_test) in kf
@@ -140,8 +157,8 @@ begin
 			# kernel matrix using this kernel param
 			K = Ks[i]
 			
-			# cv/test split
-			ids_cv, ids_test = train_test_split(1:length(y), test_size=0.25)
+			# cv/test split. stratified
+			ids_cv, ids_test = splitobs_stratified(at=0.8, y=y)
 			
 			# cv to get optimal hyper-params
 			scores = cv_run(K, y, ids_cv, n_folds, Cs)
@@ -274,6 +291,7 @@ ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+MLUtils = "f1d291b0-491e-4a28-83b9-f70985020b54"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 ScikitLearn = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
@@ -284,6 +302,7 @@ CairoMakie = "~0.7.3"
 ColorSchemes = "~3.17.1"
 DataFrames = "~1.3.2"
 JLD2 = "~0.4.21"
+MLUtils = "~0.2.0"
 PlutoUI = "~0.7.34"
 ScikitLearn = "~0.6.4"
 StatsBase = "~0.33.16"
@@ -295,7 +314,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.0-DEV.1390"
 manifest_format = "2.0"
-project_hash = "10a3f46285110955e4b146813b41dc5b85d3d4bf"
+project_hash = "fac15f7cb5f350fb8410fb61b0b5b287b2d79033"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -940,6 +959,12 @@ git-tree-sha1 = "5455aef09b40e5020e1520f551fa3135040d4ed0"
 uuid = "856f044c-d86e-5d09-b602-aeab76dc8ba7"
 version = "2021.1.1+2"
 
+[[deps.MLUtils]]
+deps = ["ChainRulesCore", "DelimitedFiles", "Random", "ShowCases", "Statistics", "StatsBase"]
+git-tree-sha1 = "37a7c99438c70d77ce75cf2e0d8b611bdd0fd5eb"
+uuid = "f1d291b0-491e-4a28-83b9-f70985020b54"
+version = "0.2.0"
+
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
 git-tree-sha1 = "3d3e902b31198a27340d0bf00d6ac452866021cf"
@@ -1296,6 +1321,11 @@ uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
 
+[[deps.ShowCases]]
+git-tree-sha1 = "7f534ad62ab2bd48591bdeac81994ea8c445e4a5"
+uuid = "605ecd9f-84a6-4c9e-81e2-4798472b76a3"
+version = "0.1.0"
+
 [[deps.Showoff]]
 deps = ["Dates", "Grisu"]
 git-tree-sha1 = "91eddf657aca81df9ae6ceb20b959ae5653ad1de"
@@ -1595,6 +1625,7 @@ version = "3.5.0+0"
 # ╟─a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 # ╠═985381fb-0f41-446a-869d-2ad8736b9403
 # ╠═7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
+# ╠═9e354dc9-d973-41c9-870f-fccd4ea66a41
 # ╠═efd8a5de-82f4-4255-9982-ff866937261f
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 # ╠═70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
