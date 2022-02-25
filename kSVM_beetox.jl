@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 985381fb-0f41-446a-869d-2ad8736b9403
-using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI, StatsBase
+using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI, StatsBase,MolecularGraph
 
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 md"# k-SVM on beetox data"
@@ -57,22 +57,26 @@ begin
 	data_dir = "gram_matrices"
 	
 	kernel = "fixed_length_rw_kernel"
-	kernel_params = [1, 2, 3, 4, 5, 6, 7, 8] # l
+	kernel_params = [0, 1, 2, 3, 4, 5, 6, 7, 8] # l
 	# kernel = "grw_kernel"
-	# kernel_params = [0.05, 0.04, 0.03, 0.02, 0.01] # γ
+	# kernel_params = [0.06, 0.05, 0.04, 0.03, 0.02, 0.01] # γ
 
-	kernel_param_name = Dict("fixed_length_rw_kernel" => "walk length, ℓ",
+	kernel_param_name = Dict("fixed_length_rw_kernel" => "walk length, L",
 		                     "grw_kernel" => "γ")
+	kernel_to_pretty_kernel = Dict("fixed_length_rw_kernel" => "fixed length RWGK",
+		"grw_kernel" => "geometric RWGK"
+	)
 end
 
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
 begin
 	Ks = []
 	toxicity = []
+	mols = []
 	for p in kernel_params
 		# load data from compute_Gram_matrix.jl
 		jldfilename = joinpath(data_dir, "BeeTox_$(kernel)_$p.jld2")
-		
+		mols = load(jldfilename, "mols")
 		toxicity = Vector(load(jldfilename, "toxicity"))
 		K        = load(jldfilename, "K")
 		push!(Ks, K)
@@ -116,9 +120,10 @@ function train_svm(K_train::Matrix, y_train::Vector, C::Float64)
 end
 
 # ╔═╡ 6b7e4746-2f1b-4d17-850b-403e3b75c453
+# assess performance of different C's via CV
+# score according to precision * recall
 function cv_run(K::Matrix{Float64}, y::Vector{Int},
-	            ids_cv, 
-	            n_folds::Int, Cs::Vector{Float64})
+	            ids_cv, n_folds::Int, Cs::Vector{Float64})
 	kf = kfolds(shuffleobs(1:length(ids_cv)), k=n_folds)
 
 	scores = zeros(length(Cs))
@@ -141,26 +146,34 @@ end
 
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
-	n_folds = 5
-	n_runs = 10
-	Cs = 10 .^ range(-5, 1, length=15)
+	n_folds = 2
+	n_runs = 3
+	# list of C-params of the SVC to loop over as candidate hyperparams
+	if kernel == "fixed_length_rw_kernel"
+		Cs = 10 .^ range(-5, 1, length=15)
+	else
+		Cs = 10 .^ range(-2, 3, length=15)
+	end
 
 	# store cross-validation accuracy
 	mean_scores = zeros(length(Cs), length(kernel_params))
 	# store test set performance metrics
 	accuracies  = zeros(length(kernel_params), n_runs)
-	@assert class_to_int["Toxic"] == 1 # for below to make sense
-	precisions  = similar(accuracies)
-	recalls     = similar(accuracies)
-	for r = 1:n_runs
+	@assert class_to_int["Toxic"] == 1 # for toxic = "positive"
+	precisions  = zeros(length(kernel_params), n_runs)
+	recalls     = zeros(length(kernel_params), n_runs)
+	# confusion matrices for each kernel param.
+	cms = [zeros(2, 2) for _ = 1:length(kernel_params)]
+	for r = 1:n_runs		
+		# cv/test split. stratified
+		ids_cv, ids_test = splitobs_stratified(at=0.8, y=y)
 		for i = 1:length(kernel_params)
 			# kernel matrix using this kernel param
 			K = Ks[i]
-			
-			# cv/test split. stratified
-			ids_cv, ids_test = splitobs_stratified(at=0.8, y=y)
-			
-			# cv to get optimal hyper-params
+
+			#=
+			cross-validation to get optimal svc hyper-param C
+			=#
 			scores = cv_run(K, y, ids_cv, n_folds, Cs)
 			# store scores
 			mean_scores[:, i] += scores
@@ -168,7 +181,9 @@ begin
 			# get optimal hyper-param C for this run
 			C_opt = Cs[argmax(scores)]
 
-			# train deployment svm
+			#=
+			train and evaluate deployment SVM on test data
+			=#
 			K_train = K[ids_cv, ids_cv]
 			svc, tf = train_svm(K_train, y[ids_cv], C_opt)
 
@@ -176,20 +191,22 @@ begin
 			K_test  = K[ids_test, ids_cv]
 			K_test_centered = tf.transform(K_test)
 			y_pred = svc.predict(K_test_centered)
-			accuracies[i, r] +=  accuracy_score(y[ids_test], y_pred)
-			# positive := toxic
-			precisions[i, r] += precision_score(y[ids_test], y_pred)
-			recalls[i, r]    +=    recall_score(y[ids_test], y_pred)
+			# store performance metrics
+			accuracies[i, r] =  accuracy_score(y[ids_test], y_pred)
+			precisions[i, r] = precision_score(y[ids_test], y_pred)
+			recalls[i, r]    =    recall_score(y[ids_test], y_pred)
+			cms[i] +=          confusion_matrix(y[ids_test], y_pred)
 		end
 	end
 	mean_scores /= n_runs
+	cms /= n_runs
 end
 
 # ╔═╡ aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
 function viz_cv_results(kernel_params, Cs, mean_scores)
 	cmap = ColorSchemes.linear_green_5_95_c69_n256
 
-	fig = Figure()
+	fig = Figure(resolution=(600, 700))
 
 	ax = Axis(fig[1, 1], 
 		      xlabel=kernel_param_name[kernel],
@@ -198,7 +215,9 @@ function viz_cv_results(kernel_params, Cs, mean_scores)
 			  xticks=(1:length(kernel_params), 
 			          ["$p" for p in kernel_params]),
 			  yticks=(1:length(Cs), 
-			          reverse(["$(round(C, digits=5))" for C in Cs]))
+			          reverse(["$(round(C, digits=5))" for C in Cs])),
+			  xticklabelrotation=kernel == "grw_kernel" ? π/2 : 0.0,
+			  title=kernel_to_pretty_kernel[kernel]
 	)
 
 	hm = heatmap!(reverse(mean_scores, dims=1)', colormap=cmap)
@@ -211,17 +230,15 @@ end
 # ╔═╡ 0905cfbe-16d5-4c2c-ba14-98be50d54bda
 viz_cv_results(kernel_params, Cs, mean_scores)
 
-# ╔═╡ a6c9f952-34ad-4119-be1f-76dd3ec382d5
-recalls
-
 # ╔═╡ efeb6109-8355-4457-996e-e507390505d8
 function viz_perf_over_kernel_params()
-	function viz_metric(X, label, i)
+	function viz_metric(X, label, i, marker)
 		μ = mean(X, dims=2)[:]
 		σ = std(X, dims=2)[:]
 		
 		errorbars!(kernel_params, μ, σ / sqrt(n_runs), color="lightgray")
-		scatter!(kernel_params, μ, label=label, color=Cycled(i))
+		scatter!(kernel_params, μ, label=label, 
+			color=Cycled(i), markersize=16, marker=marker)
 		lines!(kernel_params, μ, color=Cycled(i))
 	end
 	
@@ -229,12 +246,14 @@ function viz_perf_over_kernel_params()
 	ax  = Axis(fig[1, 1], 
 		xlabel=kernel_param_name[kernel],
 		ylabel="performance metric",
-		xticks=kernel_params
+		xticks=kernel_params,
+		yticks=0.5:0.1:1.0,
+		title=kernel_to_pretty_kernel[kernel]
 	)
-	viz_metric(accuracies, "accuracy", 1)
-	viz_metric(precisions, "precision", 2)
-	viz_metric(recalls, "recall", 3)
-	ylims!(nothing, 1.001)
+	viz_metric(accuracies, "accuracy", 1, :circle)
+	viz_metric(precisions, "precision", 2, :rect)
+	viz_metric(recalls, "recall", 3, :diamond)
+	ylims!(0.499, 1.001)
 	axislegend()
 	fig
 end
@@ -242,11 +261,14 @@ end
 # ╔═╡ 3e1b3800-364d-445a-9417-a0ad103879d0
 viz_perf_over_kernel_params()
 
-# ╔═╡ c3d4aad5-b5ac-42c7-bcd9-7cf6d3397605
-cm = confusion_matrix(y[ids_test], y_pred)
+# ╔═╡ b1176500-a574-4269-8862-a8fbf02edb2a
+opt_kernel_param_id = argmax(mean(precisions, dims=2)[:] .* mean(recalls, dims=2)[:])
+
+# ╔═╡ 5617c798-98eb-4547-afaf-70227cf58056
+cm_opt = cms[opt_kernel_param_id]
 
 # ╔═╡ 8d2dd082-b587-4bcc-9b5a-cf38375927ba
-function viz_confusion_matrix(cm::Matrix{Int64}, class_list::Vector{String})
+function viz_confusion_matrix(cm::Matrix, class_list::Vector{String})
 	# cm[i, j] is equal to the number of observations known to be in group i and predicted to be in group j.
 	cm_plot = reverse(cm, dims=1)'
 	
@@ -257,30 +279,20 @@ function viz_confusion_matrix(cm::Matrix{Int64}, class_list::Vector{String})
               ylabel="truth",
               xlabel="prediction"
     )
-    hm = heatmap!(cm_plot, colormap=ColorSchemes.algae, colorrange=(0, sum(cm)))
+    hm = heatmap!(cm_plot, colormap=ColorSchemes.algae, colorrange=(0, maximum(cm)))
     for i = 1:2
         for j = 1:2
-            text!("$(cm_plot[i, j])",
-                  position=(i, j), align=(:center, :center), color=:black)
+            text!("$(round(cm_plot[i, j], digits=1))",
+                  position=(i, j), align=(:center, :center), color="black"
+			)
         end
     end
-    Colorbar(fig[1, 2], hm, label="# molecules")
+    Colorbar(fig[1, 2], hm, label="⟨# molecules⟩")
     fig
 end
 
 # ╔═╡ 4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
-viz_confusion_matrix(cm, [int_to_class[-1], int_to_class[1]])
-
-# ╔═╡ 11c070a4-b677-4ab8-a512-822f8e440548
-with_terminal() do
-	println("to check cm...")
-	for c in ["Toxic", "Nontoxic"]
-		println("\t# true $c in test set = ", 
-			sum(y[ids_test] .== class_to_int[c]))
-		println("\t# pred $c in test set = ", 
-			sum(y_pred .== class_to_int[c]))
-	end
-end
+viz_confusion_matrix(cm_opt, [int_to_class[-1], int_to_class[1]])
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -292,18 +304,20 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MLUtils = "f1d291b0-491e-4a28-83b9-f70985020b54"
+MolecularGraph = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 ScikitLearn = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 CSV = "~0.10.2"
-CairoMakie = "~0.7.3"
+CairoMakie = "~0.7.4"
 ColorSchemes = "~3.17.1"
 DataFrames = "~1.3.2"
 JLD2 = "~0.4.21"
 MLUtils = "~0.2.0"
-PlutoUI = "~0.7.34"
+MolecularGraph = "~0.11.0"
+PlutoUI = "~0.7.35"
 ScikitLearn = "~0.6.4"
 StatsBase = "~0.33.16"
 """
@@ -312,9 +326,8 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.0-DEV.1390"
+julia_version = "1.7.1"
 manifest_format = "2.0"
-project_hash = "fac15f7cb5f350fb8410fb61b0b5b287b2d79033"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -347,7 +360,6 @@ version = "0.4.1"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
-version = "1.1.1"
 
 [[deps.ArrayInterface]]
 deps = ["Compat", "IfElse", "LinearAlgebra", "Requires", "SparseArrays", "Static"]
@@ -398,9 +410,9 @@ version = "1.0.5"
 
 [[deps.CairoMakie]]
 deps = ["Base64", "Cairo", "Colors", "FFTW", "FileIO", "FreeType", "GeometryBasics", "LinearAlgebra", "Makie", "SHA", "StaticArrays"]
-git-tree-sha1 = "b1d884ee7dae11985314192270eb5762b9ed09ae"
+git-tree-sha1 = "aedc7c910713eb616391cf95218277b714a7913f"
 uuid = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
-version = "0.7.3"
+version = "0.7.4"
 
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
@@ -416,9 +428,9 @@ version = "0.5.1"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "7dd38532a1115a215de51775f9891f0f3e1bac6a"
+git-tree-sha1 = "32ad4ece064a61855a35bdc34e3da0b495e01169"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-version = "1.12.1"
+version = "1.12.2"
 
 [[deps.ChangesOfVariables]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
@@ -471,7 +483,6 @@ version = "3.41.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "0.5.0+0"
 
 [[deps.Conda]]
 deps = ["Downloads", "JSON", "VersionParsing"]
@@ -543,9 +554,8 @@ uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.8.6"
 
 [[deps.Downloads]]
-deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
+deps = ["ArgTools", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
-version = "1.6.0"
 
 [[deps.DualNumbers]]
 deps = ["Calculus", "NaNMath", "SpecialFunctions"]
@@ -606,9 +616,6 @@ deps = ["Compat", "Dates", "Mmap", "Printf", "Test", "UUIDs"]
 git-tree-sha1 = "04d13bfa8ef11720c24e4d840c0033d145537df7"
 uuid = "48062228-2e41-5def-b9a4-89aafe57970f"
 version = "0.9.17"
-
-[[deps.FileWatching]]
-uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -882,15 +889,19 @@ version = "1.3.0"
 deps = ["Artifacts", "Pkg"]
 uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 
+[[deps.LazyJSON]]
+deps = ["JSON", "OrderedCollections", "PropertyDicts"]
+git-tree-sha1 = "ce08411caa70e0c9e780f142f59debd89a971738"
+uuid = "fc18253b-5e1b-504c-a4a2-9ece4944c004"
+version = "0.2.2"
+
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
-version = "0.6.3"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "7.73.0+4"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -899,7 +910,6 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.9.1+2"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -973,9 +983,9 @@ version = "0.5.9"
 
 [[deps.Makie]]
 deps = ["Animations", "Base64", "ColorBrewer", "ColorSchemes", "ColorTypes", "Colors", "Contour", "Distributions", "DocStringExtensions", "FFMPEG", "FileIO", "FixedPointNumbers", "Formatting", "FreeType", "FreeTypeAbstraction", "GeometryBasics", "GridLayoutBase", "ImageIO", "IntervalSets", "Isoband", "KernelDensity", "LaTeXStrings", "LinearAlgebra", "MakieCore", "Markdown", "Match", "MathTeXEngine", "Observables", "OffsetArrays", "Packing", "PlotUtils", "PolygonOps", "Printf", "Random", "RelocatableFolders", "Serialization", "Showoff", "SignedDistanceFields", "SparseArrays", "StaticArrays", "Statistics", "StatsBase", "StatsFuns", "StructArrays", "UnicodeFun"]
-git-tree-sha1 = "475b854bff7867c37687d65f7b9498401ac6536d"
+git-tree-sha1 = "cd0fd02ab0d129f03515b7b68ca77fb670ef2e61"
 uuid = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
-version = "0.16.4"
+version = "0.16.5"
 
 [[deps.MakieCore]]
 deps = ["Observables"]
@@ -1006,7 +1016,6 @@ version = "0.2.1"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.24.0+2"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -1017,6 +1026,12 @@ version = "1.0.2"
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
+[[deps.MolecularGraph]]
+deps = ["DelimitedFiles", "JSON", "LinearAlgebra", "Printf", "Requires", "Statistics", "Unmarshal", "YAML", "coordgenlibs_jll", "libinchi_jll"]
+git-tree-sha1 = "2c4173d918e302011361852864923f9bc2fb6b4c"
+uuid = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
+version = "0.11.0"
+
 [[deps.MosaicViews]]
 deps = ["MappedArrays", "OffsetArrays", "PaddedViews", "StackViews"]
 git-tree-sha1 = "b34e3bc3ca7c94914418637cb10cc4d1d80d877d"
@@ -1025,7 +1040,6 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2020.7.22"
 
 [[deps.NaNMath]]
 git-tree-sha1 = "b086b7ea07f8e38cf122f5016af580881ac914fe"
@@ -1040,7 +1054,11 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
-version = "1.2.0"
+
+[[deps.Nullables]]
+git-tree-sha1 = "8f87854cc8f3685a60689d8edecaa29d2251979b"
+uuid = "4d1e1d77-625e-5b40-9113-a560ec7a8ecd"
+version = "1.0.0"
 
 [[deps.Observables]]
 git-tree-sha1 = "fe29afdef3d0c4a8286128d4e45cc50621b1e43d"
@@ -1062,7 +1080,6 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.17+2"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -1079,7 +1096,6 @@ version = "3.1.1+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1161,7 +1177,6 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -1177,9 +1192,9 @@ version = "1.1.3"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
-git-tree-sha1 = "8979e9802b4ac3d58c503a20f2824ad67f9074dd"
+git-tree-sha1 = "85bf3e4bd279e405f91489ce518dedb1e32119cb"
 uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.34"
+version = "0.7.35"
 
 [[deps.PolygonOps]]
 git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
@@ -1213,6 +1228,11 @@ deps = ["Distributed", "Printf"]
 git-tree-sha1 = "afadeba63d90ff223a6a48d2009434ecee2ec9e8"
 uuid = "92933f4c-e287-5a05-a399-4b506db050ca"
 version = "1.7.1"
+
+[[deps.PropertyDicts]]
+git-tree-sha1 = "429d887daee312e73842cabe6b122e310b72e25d"
+uuid = "f8a19df8-e894-5f55-a973-672c1158cbca"
+version = "0.1.0"
 
 [[deps.PyCall]]
 deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
@@ -1277,7 +1297,6 @@ version = "0.3.0+0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
-version = "0.7.0"
 
 [[deps.SIMD]]
 git-tree-sha1 = "39e3df417a0dd0c4e1f89891a281f82f5373ea3b"
@@ -1359,9 +1378,9 @@ uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[deps.SpecialFunctions]]
 deps = ["ChainRulesCore", "IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
-git-tree-sha1 = "8d0c8e3d0ff211d9ff4a0c2307d876c99d10bdf1"
+git-tree-sha1 = "85e5b185ed647b8ee89aa25a7788a2b43aa8a74f"
 uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
-version = "2.1.2"
+version = "2.1.3"
 
 [[deps.StackViews]]
 deps = ["OffsetArrays"]
@@ -1377,9 +1396,9 @@ version = "0.5.5"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "Statistics"]
-git-tree-sha1 = "95c6a5d0e8c69555842fc4a927fc485040ccc31c"
+git-tree-sha1 = "6354dfaf95d398a1a70e0b28238321d5d17b2530"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.3.5"
+version = "1.4.0"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -1403,11 +1422,17 @@ git-tree-sha1 = "25405d7016a47cf2bd6cd91e66f4de437fd54a07"
 uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
 version = "0.9.16"
 
+[[deps.StringEncodings]]
+deps = ["Libiconv_jll"]
+git-tree-sha1 = "50ccd5ddb00d19392577902f0079267a72c5ab04"
+uuid = "69024149-9ee7-55f6-a4c4-859efe599b68"
+version = "0.3.5"
+
 [[deps.StructArrays]]
 deps = ["Adapt", "DataAPI", "StaticArrays", "Tables"]
-git-tree-sha1 = "d21f2c564b21a202f4677c0fba5b5ee431058544"
+git-tree-sha1 = "57617b34fa34f91d536eb265df67c2d4519b8b98"
 uuid = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
-version = "0.6.4"
+version = "0.6.5"
 
 [[deps.SuiteSparse]]
 deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
@@ -1416,7 +1441,6 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
-version = "1.0.0"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
@@ -1433,7 +1457,6 @@ version = "1.6.1"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1474,6 +1497,12 @@ deps = ["REPL"]
 git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
 uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
 version = "0.4.1"
+
+[[deps.Unmarshal]]
+deps = ["JSON", "LazyJSON", "Missings", "Nullables", "Requires"]
+git-tree-sha1 = "ee46863309f8f942249e1df1b74ba3088ff0f151"
+uuid = "cbff2730-442d-58d7-89d1-8e530c41eb02"
+version = "0.4.4"
 
 [[deps.VersionParsing]]
 git-tree-sha1 = "58d6e80b4ee071f5efd07fda82cb9fbe17200868"
@@ -1552,10 +1581,21 @@ git-tree-sha1 = "79c31e7844f6ecf779705fbc12146eb190b7d845"
 uuid = "c5fb5394-a638-5e4d-96e5-b29de1b5cf10"
 version = "1.4.0+3"
 
+[[deps.YAML]]
+deps = ["Base64", "Dates", "Printf", "StringEncodings"]
+git-tree-sha1 = "3c6e8b9f5cdaaa21340f841653942e1a6b6561e5"
+uuid = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
+version = "0.4.7"
+
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-version = "1.2.12+1"
+
+[[deps.coordgenlibs_jll]]
+deps = ["Libdl", "Pkg"]
+git-tree-sha1 = "95b76590b9a558b69566b59cc64415b29618113b"
+uuid = "f6050b86-aaaf-512f-8549-0afff1b4d57f"
+version = "1.4.0+0"
 
 [[deps.isoband_jll]]
 deps = ["Libdl", "Pkg"]
@@ -1572,13 +1612,18 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "4.0.0+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "daacc84a041563f965be61859a36e17c4e4fcd55"
 uuid = "f638f0a6-7fb0-5443-88ba-1cc74229b280"
 version = "2.0.2+0"
+
+[[deps.libinchi_jll]]
+deps = ["Libdl", "Pkg"]
+git-tree-sha1 = "63e5bdbfc6fd1b4a14dda769dfad40a2e78baaeb"
+uuid = "172afb32-8f1c-513b-968f-184fcd77af72"
+version = "1.5.0+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
@@ -1601,12 +1646,10 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.41.0+1"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "16.2.1+1"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1638,12 +1681,11 @@ version = "3.5.0+0"
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
 # ╠═aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
 # ╠═0905cfbe-16d5-4c2c-ba14-98be50d54bda
-# ╠═a6c9f952-34ad-4119-be1f-76dd3ec382d5
 # ╠═efeb6109-8355-4457-996e-e507390505d8
 # ╠═3e1b3800-364d-445a-9417-a0ad103879d0
-# ╠═c3d4aad5-b5ac-42c7-bcd9-7cf6d3397605
+# ╠═b1176500-a574-4269-8862-a8fbf02edb2a
+# ╠═5617c798-98eb-4547-afaf-70227cf58056
 # ╠═8d2dd082-b587-4bcc-9b5a-cf38375927ba
 # ╠═4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
-# ╠═11c070a4-b677-4ab8-a512-822f8e440548
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
