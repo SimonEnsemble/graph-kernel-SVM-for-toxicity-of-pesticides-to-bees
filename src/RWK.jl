@@ -7,7 +7,7 @@ export direct_product_graph, grw_kernel, fixed_point_grw_kernel, centered_Gram_m
 # for GraphMol, need to confirm if the bond has the same order
 function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol; 
                               verbose::Bool=false, store_vertex_pair::Bool=false, 
-                              store_colors::Bool=false, store_edge_labels::Bool=false)
+                              store_nodelabel::Bool=false, store_edgelabel::Bool=false)
     # unpack species, bond orders
     vertex_labels_a, vertex_labels_b = atomsymbol(mol_a), atomsymbol(mol_b)
     n_a, n_b = length(vertex_labels_a), length(vertex_labels_b)
@@ -36,8 +36,8 @@ function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol;
                 if store_vertex_pair
                     set_props!(axb, nv(axb), Dict(:vertex_pair => (a, b))) # store vertex pair into graph
                 end
-                if store_colors
-                    set_props!(axb, nv(axb), Dict(:label => vertex_labels[a]))
+                if store_nodelabel
+                    set_props!(axb, nv(axb), Dict(:label => vertex_labels_a[a]))
                 end
             end
         end
@@ -74,7 +74,7 @@ function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol;
             v2 = ab_vertex_pair_to_axb_vertex[a_2, b_2]
             if (v1 != 0) && (v2 != 0) # if v1 and v2 are vertices in axb...
                 add_edge!(axb, v1, v2)
-                if store_edge_labels
+                if store_edgelabel
                     set_props!(axb, ne(axb), Dict(:bondorder => edge_labels_a[e_a])) # store edge labels
                 end
             end
@@ -86,7 +86,7 @@ function direct_product_graph(mol_a::GraphMol, mol_b::GraphMol;
             v2 = ab_vertex_pair_to_axb_vertex[a_2, b_1]
             if (v1 != 0) && (v2 != 0) # if v1 and v2 are vertices in axb...
                 add_edge!(axb, v1, v2)
-                if store_edge_labels
+                if store_edgelabel
                     set_props!(axb, ne(axb), Dict(:bondorder => edge_labels_a[e_a])) # store edge labels
                 end
             end
