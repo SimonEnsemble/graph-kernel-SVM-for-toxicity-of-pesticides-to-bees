@@ -5,7 +5,10 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 985381fb-0f41-446a-869d-2ad8736b9403
-using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI, StatsBase,MolecularGraph
+using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI, StatsBase,MolecularGraph, Colors
+
+# ╔═╡ b77c444e-3b92-4e3d-8cb3-993016f15ca4
+include("plot_theme.jl")
 
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 md"# k-SVM on beetox data"
@@ -58,8 +61,8 @@ begin
 	
 	kernel = "fixed_length_rw_kernel"
 	kernel_params = [0, 1, 2, 3, 4, 5, 6, 7, 8] # l
-	# kernel = "grw_kernel"
-	# kernel_params = [0.06, 0.05, 0.04, 0.03, 0.02, 0.01] # γ
+	kernel = "grw_kernel"
+	kernel_params = [0.06, 0.05, 0.04, 0.03, 0.02, 0.01] # γ
 
 	kernel_param_name = Dict("fixed_length_rw_kernel" => "walk length, L",
 		                     "grw_kernel" => "γ")
@@ -87,6 +90,9 @@ end
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
 y = map(t -> class_to_int[t], toxicity)
 
+# ╔═╡ 378c17e6-83bd-4d88-9608-d00f813ad6bd
+sum(y .== -1)
+
 # ╔═╡ 9a6ce760-5da6-4c7e-9100-cd6676949bb1
 function viz_class_distn(y)	
 	fig = Figure()
@@ -98,6 +104,7 @@ function viz_class_distn(y)
 	)
 	barplot!(1:2, [sum(y .== l) for l in unique(y)], 
 		     color=[colors[int_to_class[l]] for l in unique(y)])
+	save("class_distn_$kernel.pdf", fig)
 	fig
 end
 
@@ -146,8 +153,8 @@ end
 
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
-	n_folds = 2
-	n_runs = 3
+	n_folds = 3
+	n_runs = 5
 	# list of C-params of the SVC to loop over as candidate hyperparams
 	if kernel == "fixed_length_rw_kernel"
 		Cs = 10 .^ range(-5, 1, length=15)
@@ -165,6 +172,7 @@ begin
 	# confusion matrices for each kernel param.
 	cms = [zeros(2, 2) for _ = 1:length(kernel_params)]
 	for r = 1:n_runs		
+		println("run # =", r " / ", n_runs)
 		# cv/test split. stratified
 		ids_cv, ids_test = splitobs_stratified(at=0.8, y=y)
 		for i = 1:length(kernel_params)
@@ -223,6 +231,7 @@ function viz_cv_results(kernel_params, Cs, mean_scores)
 	hm = heatmap!(reverse(mean_scores, dims=1)', colormap=cmap)
 
 	Colorbar(fig[1, 2], hm, label="validation score")
+	save("cv_heatmap_$kernel.pdf", fig)
 
 	return fig
 end
@@ -255,6 +264,7 @@ function viz_perf_over_kernel_params()
 	viz_metric(recalls, "recall", 3, :diamond)
 	ylims!(0.499, 1.001)
 	axislegend()
+	save("performance_$kernel.pdf", fig)
 	fig
 end
 
@@ -288,6 +298,7 @@ function viz_confusion_matrix(cm::Matrix, class_list::Vector{String})
         end
     end
     Colorbar(fig[1, 2], hm, label="⟨# molecules⟩")
+	save("cm_$kernel.pdf", fig)
     fig
 end
 
@@ -300,6 +311,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
+Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -313,6 +325,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 CSV = "~0.10.2"
 CairoMakie = "~0.7.4"
 ColorSchemes = "~3.17.1"
+Colors = "~0.12.8"
 DataFrames = "~1.3.2"
 JLD2 = "~0.4.21"
 MLUtils = "~0.2.0"
@@ -326,8 +339,9 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.1"
+julia_version = "1.8.0-DEV.1390"
 manifest_format = "2.0"
+project_hash = "dfd50a9f81b8424fc8480521d7a91189b3405ec3"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -360,6 +374,7 @@ version = "0.4.1"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
+version = "1.1.1"
 
 [[deps.ArrayInterface]]
 deps = ["Compat", "IfElse", "LinearAlgebra", "Requires", "SparseArrays", "Static"]
@@ -483,6 +498,7 @@ version = "3.41.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
+version = "0.5.0+0"
 
 [[deps.Conda]]
 deps = ["Downloads", "JSON", "VersionParsing"]
@@ -554,8 +570,9 @@ uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.8.6"
 
 [[deps.Downloads]]
-deps = ["ArgTools", "LibCURL", "NetworkOptions"]
+deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+version = "1.6.0"
 
 [[deps.DualNumbers]]
 deps = ["Calculus", "NaNMath", "SpecialFunctions"]
@@ -616,6 +633,9 @@ deps = ["Compat", "Dates", "Mmap", "Printf", "Test", "UUIDs"]
 git-tree-sha1 = "04d13bfa8ef11720c24e4d840c0033d145537df7"
 uuid = "48062228-2e41-5def-b9a4-89aafe57970f"
 version = "0.9.17"
+
+[[deps.FileWatching]]
+uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -898,10 +918,12 @@ version = "0.2.2"
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
+version = "0.6.3"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
+version = "7.73.0+4"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -910,6 +932,7 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
+version = "1.9.1+2"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -1016,6 +1039,7 @@ version = "0.2.1"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+version = "2.24.0+2"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -1040,6 +1064,7 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
+version = "2020.7.22"
 
 [[deps.NaNMath]]
 git-tree-sha1 = "b086b7ea07f8e38cf122f5016af580881ac914fe"
@@ -1054,6 +1079,7 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
+version = "1.2.0"
 
 [[deps.Nullables]]
 git-tree-sha1 = "8f87854cc8f3685a60689d8edecaa29d2251979b"
@@ -1080,6 +1106,7 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+version = "0.3.17+2"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -1096,6 +1123,7 @@ version = "3.1.1+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
+version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1177,6 +1205,7 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -1297,6 +1326,7 @@ version = "0.3.0+0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "0.7.0"
 
 [[deps.SIMD]]
 git-tree-sha1 = "39e3df417a0dd0c4e1f89891a281f82f5373ea3b"
@@ -1441,6 +1471,7 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+version = "1.0.0"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
@@ -1457,6 +1488,7 @@ version = "1.6.1"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1590,6 +1622,7 @@ version = "0.4.7"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
+version = "1.2.12+1"
 
 [[deps.coordgenlibs_jll]]
 deps = ["Libdl", "Pkg"]
@@ -1612,6 +1645,7 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+version = "4.0.0+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1646,10 +1680,12 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+version = "1.41.0+1"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+version = "16.2.1+1"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1667,6 +1703,7 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╟─a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 # ╠═985381fb-0f41-446a-869d-2ad8736b9403
+# ╠═b77c444e-3b92-4e3d-8cb3-993016f15ca4
 # ╠═7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
 # ╠═9e354dc9-d973-41c9-870f-fccd4ea66a41
 # ╠═efd8a5de-82f4-4255-9982-ff866937261f
@@ -1674,6 +1711,7 @@ version = "3.5.0+0"
 # ╠═70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
 # ╠═008f0df9-5cdb-449d-a837-3d808536d30a
 # ╠═119ffdca-7f51-4e71-b825-843da6a75413
+# ╠═378c17e6-83bd-4d88-9608-d00f813ad6bd
 # ╠═9a6ce760-5da6-4c7e-9100-cd6676949bb1
 # ╠═e22a6f2b-053c-42e0-9f24-6ecd8b16fcf7
 # ╠═14d49e19-92e2-4127-9224-35d09e852447
