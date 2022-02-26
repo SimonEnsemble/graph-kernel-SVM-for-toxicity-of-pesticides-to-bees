@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.0
+# v0.18.1
 
 using Markdown
 using InteractiveUtils
@@ -60,9 +60,9 @@ begin
 	data_dir = "gram_matrices"
 	
 	kernel = "fixed_length_rw_kernel"
-	kernel_params = [0, 1, 2, 3, 4, 5, 6, 7, 8] # l
-	kernel = "grw_kernel"
-	kernel_params = [0.06, 0.05, 0.04, 0.03, 0.02, 0.01] # γ
+	kernel_params = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] # l
+	# kernel = "grw_kernel"
+	# kernel_params = [0.06, 0.05, 0.04, 0.03, 0.02, 0.01] # γ
 
 	kernel_param_name = Dict("fixed_length_rw_kernel" => "walk length, L",
 		                     "grw_kernel" => "γ")
@@ -95,7 +95,7 @@ sum(y .== -1)
 
 # ╔═╡ 9a6ce760-5da6-4c7e-9100-cd6676949bb1
 function viz_class_distn(y)	
-	fig = Figure()
+	fig = Figure(resolution=(300, 500))
 	ax  = Axis(fig[1, 1], 
 		       xlabel="label", 
 		       ylabel="# molecules",   
@@ -154,12 +154,12 @@ end
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 5
+	n_runs = 50
 	# list of C-params of the SVC to loop over as candidate hyperparams
 	if kernel == "fixed_length_rw_kernel"
 		Cs = 10 .^ range(-5, 1, length=15)
 	else
-		Cs = 10 .^ range(-2, 3, length=15)
+		Cs = 10 .^ range(-1, 3, length=15)
 	end
 
 	# store cross-validation accuracy
@@ -214,18 +214,18 @@ end
 function viz_cv_results(kernel_params, Cs, mean_scores)
 	cmap = ColorSchemes.linear_green_5_95_c69_n256
 
-	fig = Figure(resolution=(600, 700))
+	fig = Figure(resolution=(600, 500))
 
 	ax = Axis(fig[1, 1], 
 		      xlabel=kernel_param_name[kernel],
-			  ylabel="C",
+			  ylabel="SVM C parameter",
 		      aspect=length(kernel_params) / length(Cs),
 			  xticks=(1:length(kernel_params), 
 			          ["$p" for p in kernel_params]),
 			  yticks=(1:length(Cs), 
 			          reverse(["$(round(C, digits=5))" for C in Cs])),
 			  xticklabelrotation=kernel == "grw_kernel" ? π/2 : 0.0,
-			  title=kernel_to_pretty_kernel[kernel]
+			  title="hyperparameter exploration\nvia $n_folds-folds cross-validation"
 	)
 
 	hm = heatmap!(reverse(mean_scores, dims=1)', colormap=cmap)
@@ -257,7 +257,7 @@ function viz_perf_over_kernel_params()
 		ylabel="performance metric",
 		xticks=kernel_params,
 		yticks=0.5:0.1:1.0,
-		title=kernel_to_pretty_kernel[kernel]
+		title="classifier performance on test set"
 	)
 	viz_metric(accuracies, "accuracy", 1, :circle)
 	viz_metric(precisions, "precision", 2, :rect)
@@ -287,13 +287,15 @@ function viz_confusion_matrix(cm::Matrix, class_list::Vector{String})
               xticks=([1, 2], class_list),
               yticks=([1, 2], reverse(class_list)),
               ylabel="truth",
-              xlabel="prediction"
+              xlabel="prediction",
+		      title="⟨confusion matrix⟩ on test set, L=$(opt_kernel_param_id-1)"
     )
     hm = heatmap!(cm_plot, colormap=ColorSchemes.algae, colorrange=(0, maximum(cm)))
     for i = 1:2
         for j = 1:2
             text!("$(round(cm_plot[i, j], digits=1))",
-                  position=(i, j), align=(:center, :center), color="black"
+                  position=(i, j), align=(:center, :center), color="white", 
+				  textsize=50
 			)
         end
     end

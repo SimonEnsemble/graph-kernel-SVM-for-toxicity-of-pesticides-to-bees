@@ -1,7 +1,6 @@
 cool_theme = Theme(
     palette = (color=[c for c in ColorSchemes.seaborn_muted6], marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross]),
     textcolor = :gray30,
-    textcolor = :black,
     linewidth=4,
     fontsize=20,
     #font="open-sans",
