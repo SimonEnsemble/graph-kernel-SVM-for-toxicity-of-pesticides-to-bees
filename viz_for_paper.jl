@@ -30,25 +30,27 @@ end
 atomcolor(mol_b)
 
 # ╔═╡ a6e669b2-bdf8-4786-bf30-6b73302cca27
-function viz_molecule(mol)
+function viz_molecule(mol, savename)
 	canvas = SvgCanvas()
 	draw2d!(canvas, mol)
 	drawatomindex!(canvas, mol, bgcolor=MolecularGraph.Color(255, 255, 255))
-	return tosvg(canvas, 300, 300)
+	d = tosvg(canvas, 300, 300)
+
+	f = open(savename, "w")
+	write(f, d)
+	close(f)
+	return d
 end
 
 # ╔═╡ b907dfea-cab3-4350-a51f-00f6e8cd7670
 begin
-	da = viz_molecule(mol_a)
+	da = viz_molecule(mol_a, "molecule_a.svg")
 	HTML(da)
 end
 
-# ╔═╡ 139578a9-a8cf-403e-af34-672c2646d6b2
-save("molecule_a.pdf", da)
-
 # ╔═╡ c6b5616b-d1a8-4cf1-b97b-cf0c142b1fa3
 begin
-	db = viz_molecule(mol_b)
+	db = viz_molecule(mol_b, "molecule_b.svg")
 	HTML(db)
 end
 
@@ -829,7 +831,6 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═ea275a9a-a7df-49ff-9c71-ff88033ed28a
 # ╠═a6e669b2-bdf8-4786-bf30-6b73302cca27
 # ╠═b907dfea-cab3-4350-a51f-00f6e8cd7670
-# ╠═139578a9-a8cf-403e-af34-672c2646d6b2
 # ╠═c6b5616b-d1a8-4cf1-b97b-cf0c142b1fa3
 # ╠═eac14468-06d5-42ce-ac86-890ef38c0b00
 # ╠═74b9375d-b5ee-4288-980a-300e8c204da3
