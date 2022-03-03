@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.1
+# v0.17.2
 
 using Markdown
 using InteractiveUtils
@@ -7,11 +7,65 @@ using InteractiveUtils
 # ╔═╡ 985381fb-0f41-446a-869d-2ad8736b9403
 using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI, StatsBase,MolecularGraph, Colors
 
-# ╔═╡ b77c444e-3b92-4e3d-8cb3-993016f15ca4
-include("plot_theme.jl")
-
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 md"# k-SVM on beetox data"
+
+# ╔═╡ f4b4bf52-0321-4883-873b-cbf692a51395
+set_theme!(
+Theme(                                                                         
+    palette = (color=[c for c in ColorSchemes.seaborn_muted6], marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross]),
+    textcolor = :gray30,                                                                    
+    linewidth=4,                                                                            
+    fontsize=20,                                                                            
+    #font="open-sans",                                                                      
+    font="Ubuntu Mono",                                                                     
+    resolution = (520, 400),                                                                
+    Axis = (                                                                                
+        #backgroundcolor = RGB(1.0, 1.0, 1.0),                                              
+        backgroundcolor = "mintcream",                                                      
+        xgridcolor = (:black, 0.15),                                                        
+        ygridcolor = (:black, 0.15),                                                        
+        xminorgridcolor = (:gray, 0.15),                                                    
+        yminorgridcolor = (:gray, 0.15),                                                    
+        leftspinevisible = false,                                                           
+        rightspinevisible = false,                                                          
+        ygridstyle=:dash,                                                                   
+        xgridstyle=:dash,                                                                   
+        bottomspinevisible = false,                                                         
+        topspinevisible = false,                                                            
+        xminorticksvisible = false,                                                         
+        yminorticksvisible = false,                                                         
+        xticksvisible = false,                                                              
+        yticksvisible = false,                                                              
+        xlabelpadding = 3,                                                                  
+        ylabelpadding = 3                                                                   
+    ),                                                                                      
+    Legend = (                                                                              
+        framevisible = true,                                                                
+        titlehalign=:left,                                                                  
+        titlesize=16,                                                                       
+        labelsize=16,                                                                       
+        framecolor=(:black, 0.5)                                                            
+        # padding = (1, 0, 0, 0),                                                           
+    ),                                                                                      
+    Axis3 = (                                                                               
+        xgridcolor = (:black, 0.07),                                                        
+        ygridcolor = (:black, 0.07),                                                        
+        zgridcolor = (:black, 0.07),                                                        
+        xspinesvisible = false,                                                             
+        yspinesvisible = false,                                                             
+        zspinesvisible = false,                                                             
+        xticksvisible = false,                                                              
+        yticksvisible = false,                                                              
+        zticksvisible = false,                                                              
+    ),                                                                                      
+    Colorbar = (                                                                            
+        ticksvisible = false,                                                               
+        spinewidth = 0,                                                                     
+        ticklabelpad = 5,                                                                   
+    )                                                                                       
+)                                                                                           
+)
 
 # ╔═╡ 7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
 import MLUtils: splitobs, kfolds, shuffleobs
@@ -154,7 +208,7 @@ end
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 50
+	n_runs = 100
 	# list of C-params of the SVC to loop over as candidate hyperparams
 	if kernel == "fixed_length_rw_kernel"
 		Cs = 10 .^ range(-5, 1, length=15)
@@ -244,8 +298,9 @@ function viz_perf_over_kernel_params()
 	function viz_metric(X, label, i, marker)
 		μ = mean(X, dims=2)[:]
 		σ = std(X, dims=2)[:]
+		ebars = σ / sqrt(n_runs)
 		
-		errorbars!(kernel_params, μ, σ / sqrt(n_runs), color="lightgray")
+		errorbars!(kernel_params, μ, ebars, color="lightgray")
 		scatter!(kernel_params, μ, label=label, 
 			color=Cycled(i), markersize=16, marker=marker)
 		lines!(kernel_params, μ, color=Cycled(i))
@@ -307,6 +362,9 @@ end
 # ╔═╡ 4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
 viz_confusion_matrix(cm_opt, [int_to_class[-1], int_to_class[1]])
 
+# ╔═╡ 09f68565-e645-4ef9-bdb9-09537418d503
+n_runs
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -341,7 +399,7 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.1"
+julia_version = "1.7.2"
 manifest_format = "2.0"
 
 [[deps.AbstractFFTs]]
@@ -1682,7 +1740,7 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╟─a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 # ╠═985381fb-0f41-446a-869d-2ad8736b9403
-# ╠═b77c444e-3b92-4e3d-8cb3-993016f15ca4
+# ╟─f4b4bf52-0321-4883-873b-cbf692a51395
 # ╠═7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
 # ╠═9e354dc9-d973-41c9-870f-fccd4ea66a41
 # ╠═efd8a5de-82f4-4255-9982-ff866937261f
@@ -1704,5 +1762,6 @@ version = "3.5.0+0"
 # ╠═5617c798-98eb-4547-afaf-70227cf58056
 # ╠═8d2dd082-b587-4bcc-9b5a-cf38375927ba
 # ╠═4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
+# ╠═09f68565-e645-4ef9-bdb9-09537418d503
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
