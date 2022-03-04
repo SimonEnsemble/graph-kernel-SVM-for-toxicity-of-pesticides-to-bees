@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.17.2
+# v0.18.1
 
 using Markdown
 using InteractiveUtils
@@ -293,16 +293,6 @@ end
 # ╔═╡ 0905cfbe-16d5-4c2c-ba14-98be50d54bda
 viz_cv_results(kernel_params, Cs, mean_scores)
 
-# ╔═╡ ac08c08a-fc62-4a86-a22b-d300420334ed
-argmax(mean_scores)
-
-# ╔═╡ 2b272545-b15e-437e-84d1-4c3e038552e7
-begin
-	x = zeros(5, 4)
-	x[2, 3] = 1
-	heatmap(reverse(x, dims=1)')
-end
-
 # ╔═╡ efeb6109-8355-4457-996e-e507390505d8
 function viz_perf_over_kernel_params()
 	function viz_metric(X, label, i, marker)
@@ -349,13 +339,19 @@ kernel_params[opt_kernel_param_id]
 md"opt accuracy, precision, recall on test data"
 
 # ╔═╡ f206780b-37a7-42d9-8aca-db53aad206ef
-mean(accuracies[opt_kernel_param_id, :])
+acc_test = mean(accuracies[opt_kernel_param_id, :])
 
 # ╔═╡ 3e36201e-67a9-4d9f-9304-28c27f8b21e7
-mean(precisions[opt_kernel_param_id, :])
+pre_test = mean(precisions[opt_kernel_param_id, :])
 
 # ╔═╡ 8699be2e-65aa-4817-ab17-1ec6cd742ed0
-mean(recalls[opt_kernel_param_id, :])
+rec_test = mean(recalls[opt_kernel_param_id, :])
+
+# ╔═╡ cb6b4422-bf1e-4363-8dc1-8129b56c3357
+"Our classifier achieves an accuracy, precision, and recall of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), and $(round(rec_test,digits=2))."
+
+# ╔═╡ 34c7e5e2-2f86-434d-b782-ee607d0d284c
+"The optimal classifier, with walk length $(kernel_params[opt_kernel_param_id]), achieves a (mean over $n_runs runs) accuracy, precision, and recall of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), and $(round(rec_test,digits=2)) on a test data set. "
 
 # ╔═╡ 5617c798-98eb-4547-afaf-70227cf58056
 cm_opt = cms[opt_kernel_param_id]
@@ -427,7 +423,7 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.2"
+julia_version = "1.7.1"
 manifest_format = "2.0"
 
 [[deps.AbstractFFTs]]
@@ -1784,8 +1780,6 @@ version = "3.5.0+0"
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
 # ╠═aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
 # ╠═0905cfbe-16d5-4c2c-ba14-98be50d54bda
-# ╠═ac08c08a-fc62-4a86-a22b-d300420334ed
-# ╠═2b272545-b15e-437e-84d1-4c3e038552e7
 # ╠═efeb6109-8355-4457-996e-e507390505d8
 # ╠═3e1b3800-364d-445a-9417-a0ad103879d0
 # ╟─ef3dabd3-ac07-4796-a765-97a3bf465254
@@ -1795,6 +1789,8 @@ version = "3.5.0+0"
 # ╠═f206780b-37a7-42d9-8aca-db53aad206ef
 # ╠═3e36201e-67a9-4d9f-9304-28c27f8b21e7
 # ╠═8699be2e-65aa-4817-ab17-1ec6cd742ed0
+# ╠═cb6b4422-bf1e-4363-8dc1-8129b56c3357
+# ╠═34c7e5e2-2f86-434d-b782-ee607d0d284c
 # ╠═5617c798-98eb-4547-afaf-70227cf58056
 # ╠═8d2dd082-b587-4bcc-9b5a-cf38375927ba
 # ╠═4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
