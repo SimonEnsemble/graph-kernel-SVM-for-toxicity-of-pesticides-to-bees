@@ -5,10 +5,13 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 985381fb-0f41-446a-869d-2ad8736b9403
-using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI, StatsBase,MolecularGraph, Colors
+using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI, StatsBase,MolecularGraph, Colors, Random
 
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 md"# k-SVM on beetox data"
+
+# ╔═╡ d8fff47e-bd94-498d-a2d8-11043b687503
+Random.seed!(97330)
 
 # ╔═╡ f4b4bf52-0321-4883-873b-cbf692a51395
 set_theme!(
@@ -284,6 +287,11 @@ function viz_cv_results(kernel_params, Cs, mean_scores)
 
 	hm = heatmap!(reverse(mean_scores, dims=1)', colormap=cmap)
 
+	# plot optimal as star.
+	id_y, id_x = argmax(mean_scores).I # column is x; row is y.
+	scatter!([id_x], [size(mean_scores)[1]- id_y + 1], 
+		marker=:star5, color="black", markersize=15)
+
 	Colorbar(fig[1, 2], hm, label="validation score")
 	save("cv_heatmap_$kernel.pdf", fig)
 
@@ -293,8 +301,15 @@ end
 # ╔═╡ 0905cfbe-16d5-4c2c-ba14-98be50d54bda
 viz_cv_results(kernel_params, Cs, mean_scores)
 
+# ╔═╡ e0251242-86c8-4fd8-818f-9364905338de
+argmax(mean_scores).I
+
+# ╔═╡ fd2835ea-1439-4131-b54f-0d0f060764f3
+mean_scores
+
 # ╔═╡ efeb6109-8355-4457-996e-e507390505d8
 function viz_perf_over_kernel_params()
+	
 	function viz_metric(X, label, i, marker)
 		μ = mean(X, dims=2)[:]
 		σ = std(X, dims=2)[:]
@@ -314,9 +329,13 @@ function viz_perf_over_kernel_params()
 		yticks=0.5:0.1:1.0,
 		title="classifier performance on test set"
 	)
+	opt_L = kernel_params[argmax(mean_scores).I[2]]
+	vlines!(ax, [opt_L], linewidth=1, color=:gray, label="Lₒₚₜ", linestyle=:dash)
+	
 	viz_metric(accuracies, "accuracy", 1, :circle)
 	viz_metric(precisions, "precision", 2, :rect)
 	viz_metric(recalls, "recall", 3, :diamond)
+	
 	ylims!(0.499, 1.001)
 	axislegend()
 	save("performance_$kernel.pdf", fig)
@@ -333,7 +352,10 @@ md"optimum model... select based on cross-validation procedure."
 opt_kernel_param_id = argmax(mean_scores).I[2]
 
 # ╔═╡ e7fbc5a6-d88a-469c-9bb9-aafe48ed7700
-kernel_params[opt_kernel_param_id]
+L_opt = kernel_params[opt_kernel_param_id] # optimal L
+
+# ╔═╡ f257f830-45a0-4ad2-bb3f-b675a687182e
+C_opt = Cs[argmax(mean_scores).I[1]]
 
 # ╔═╡ 12eef69e-7eae-4639-805a-ea00ed71eb03
 md"opt accuracy, precision, recall on test data"
@@ -402,6 +424,7 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MLUtils = "f1d291b0-491e-4a28-83b9-f70985020b54"
 MolecularGraph = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 ScikitLearn = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
@@ -1764,7 +1787,8 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╟─a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 # ╠═985381fb-0f41-446a-869d-2ad8736b9403
-# ╟─f4b4bf52-0321-4883-873b-cbf692a51395
+# ╠═d8fff47e-bd94-498d-a2d8-11043b687503
+# ╠═f4b4bf52-0321-4883-873b-cbf692a51395
 # ╠═7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
 # ╠═9e354dc9-d973-41c9-870f-fccd4ea66a41
 # ╠═efd8a5de-82f4-4255-9982-ff866937261f
@@ -1780,11 +1804,14 @@ version = "3.5.0+0"
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
 # ╠═aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
 # ╠═0905cfbe-16d5-4c2c-ba14-98be50d54bda
+# ╠═e0251242-86c8-4fd8-818f-9364905338de
+# ╠═fd2835ea-1439-4131-b54f-0d0f060764f3
 # ╠═efeb6109-8355-4457-996e-e507390505d8
 # ╠═3e1b3800-364d-445a-9417-a0ad103879d0
 # ╟─ef3dabd3-ac07-4796-a765-97a3bf465254
 # ╠═b1176500-a574-4269-8862-a8fbf02edb2a
 # ╠═e7fbc5a6-d88a-469c-9bb9-aafe48ed7700
+# ╠═f257f830-45a0-4ad2-bb3f-b675a687182e
 # ╟─12eef69e-7eae-4639-805a-ea00ed71eb03
 # ╠═f206780b-37a7-42d9-8aca-db53aad206ef
 # ╠═3e36201e-67a9-4d9f-9304-28c27f8b21e7
