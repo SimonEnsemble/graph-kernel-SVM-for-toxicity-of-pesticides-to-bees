@@ -38,10 +38,13 @@ function stratified_kfolds(ids, k; y)
 	return tups
 end
 
+# ╔═╡ 0899f547-7fb2-4790-a08e-22ffac46b032
+my_colors = [c for c in ColorSchemes.seaborn_muted6]
+
 # ╔═╡ 79295613-923b-42a3-a31f-8ffe68aa8cb0
 set_theme!(
 	Theme(
-	    palette = (color=[c for c in ColorSchemes.seaborn_muted6], marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross]),
+	    palette = (color=my_colors, marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross]),
 	    textcolor = :gray30,
 	    linewidth=4,
 	    fontsize=20,
@@ -49,8 +52,8 @@ set_theme!(
 	    font="Ubuntu Mono",
 	    resolution = (520, 400),
 	    Axis = (
-	        #backgroundcolor = RGB(1.0, 1.0, 1.0),
-	        backgroundcolor = RGB(0.96, 1.0, 0.98),
+	        backgroundcolor = RGB(1.0, 1.0, 1.0),
+	        # backgroundcolor = RGB(0.96, 1.0, 0.98),
 	        xgridcolor = (:black, 0.15),
 	        ygridcolor = (:black, 0.15),
 	        xminorgridcolor = (:gray, 0.15),
@@ -305,19 +308,33 @@ end
 viz_cv_results(kernel_params, Cs, mean_scores)
 
 # ╔═╡ efeb6109-8355-4457-996e-e507390505d8
-function viz_perf_over_kernel_params()
-	
-	function viz_metric(X, label, i, marker)
+function viz_perf_over_kernel_params(three_panel::Bool)
+	function wut_to_plot(X; std_err=false)
 		μ = mean(X, dims=2)[:]
 		σ = std(X, dims=2)[:]
-		ebars = σ / sqrt(n_runs)
-		
-		errorbars!(kernel_params, μ, ebars, color="lightgray")
-		scatter!(kernel_params, μ, label=label, 
-			color=Cycled(i), markersize=16, marker=marker)
-		lines!(kernel_params, μ, color=Cycled(i))
+		ebars = σ 
+		if std_err
+			ebars /= sqrt(n_runs)
+		end
+		return μ, ebars
+	end
+
+	function viz_bands(ax, X, i; std_err=false)
+		μ, ebars = wut_to_plot(X, std_err=std_err)
+		band!(ax, kernel_params, μ .- ebars, μ .+ ebars, 
+				color=(my_colors[i], 0.1))
 	end
 	
+	function viz_metric(ax, X, label, i, marker; std_err=false, viz_ebars=false)
+		μ, ebars = wut_to_plot(X, std_err=std_err)
+		if viz_ebars
+			errorbars!(ax, kernel_params, μ, ebars, color="lightgray")
+		end
+		scatter!(ax, kernel_params, μ, label=label, 
+			color=my_colors[i], markersize=16, marker=marker)
+		lines!(ax, kernel_params, μ, color=my_colors[i])
+	end
+
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		xlabel=kernel_param_name[kernel],
@@ -329,19 +346,24 @@ function viz_perf_over_kernel_params()
 	opt_L = kernel_params[argmax(mean_scores).I[2]]
 	vl_p = vlines!(ax, [opt_L], linewidth=1, color=:gray, linestyle=:dash)
 	
-	viz_metric(accuracies, "accuracy", 1, :circle)
-	viz_metric(precisions, "precision", 2, :rect)
-	viz_metric(recalls, "recall", 3, :diamond)
+	viz_bands(ax, accuracies, 1)
+	viz_bands(ax, precisions, 2)
+	viz_bands(ax, recalls, 3)
 	
-	ylims!(0.499, 1.001)
-	axislegend()
+	viz_metric(ax, accuracies, "accuracy", 1, :circle)
+	viz_metric(ax, precisions, "precision", 2, :rect)
+	viz_metric(ax, recalls, "recall", 3, :diamond)
+	
+	ylims!(0.45, 1.001)
+	xlims!(-0.2, 12.2)
+	axislegend(orientation=:horizontal)
 	axislegend(ax, [vl_p], ["Lₒₚₜ"], "", position = :rb, orientation = :horizontal)
 	save("performance_$kernel.pdf", fig)
 	fig
 end
 
 # ╔═╡ 3e1b3800-364d-445a-9417-a0ad103879d0
-viz_perf_over_kernel_params()
+viz_perf_over_kernel_params(false)
 
 # ╔═╡ ef3dabd3-ac07-4796-a765-97a3bf465254
 md"optimum model... select based on cross-validation procedure."
@@ -1870,6 +1892,7 @@ version = "3.5.0+0"
 # ╠═8e00b53c-b2da-4f9d-bbd7-803021a36a0b
 # ╠═d8fff47e-bd94-498d-a2d8-11043b687503
 # ╠═bb0573df-790b-44f6-a373-09a7c91e35f0
+# ╠═0899f547-7fb2-4790-a08e-22ffac46b032
 # ╠═79295613-923b-42a3-a31f-8ffe68aa8cb0
 # ╠═efd8a5de-82f4-4255-9982-ff866937261f
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
