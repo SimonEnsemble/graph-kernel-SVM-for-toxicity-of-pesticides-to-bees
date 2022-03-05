@@ -13,6 +13,9 @@ begin
 	using MolecularGraph, CSV, DataFrames, Graphs, MetaGraphs, Colors, GraphPlot, Cairo, Compose, RWK
 end
 
+# ╔═╡ 36af2a96-2edc-4163-9b90-c31dc72feb39
+DRAW_SETTING[:C_visible] = true
+
 # ╔═╡ b73e7f22-cd3e-4e47-8561-220f9151f948
 data = CSV.read("new_smiles.csv", DataFrame)
 
@@ -62,13 +65,10 @@ function viz_molecule(mol, savename)
 	canvas = SvgCanvas()
 	draw2d!(canvas, mol)
 	drawatomindex!(canvas, mol, 
-		bgcolor=MolecularGraph.Color(255, 255, 255))
-	d = tosvg(canvas, 300, 300)
-
-	f = open(savename, "w")
-	write(f, d)
-	close(f)
-	return d
+		bgcolor=MolecularGraph.Color(255, 255, 255), opacity=0.6)
+	svg_string = tosvg(canvas, 300, 300)
+	savesvg(svg_string, savename)
+	return svg_string
 end
 
 # ╔═╡ b907dfea-cab3-4350-a51f-00f6e8cd7670
@@ -103,15 +103,20 @@ function viz_graph(mol::GraphMol)
 	# locs_x, locs_y = circular_layout(graph)
 	gplot(graph, locs_x, locs_y,
 	      nodestrokec=[RGB(rgb.r/255, rgb.g/255, rgb.b/255) for rgb in atomcolor(mol)],
+		  nodefillc=RGB(1.0, 1.0, 1.0),
 		NODELABELSIZE=5.0,
 		EDGELABELSIZE=5.0,
-          nodefillc=RGB(1.0,1.0,1.0),
+          # nodefillc=RGB(1.0,1.0,1.0),
+		EDGELINEWIDTH=20.0/nv(graph),
 	      # nodestrokec = colorant"black",
 	      nodestrokelw=3,
           nodelabel=["$i" for i = 1:nv(graph)],
           edgelinewidth=2,
           edgelabel = edgelabels)
 end
+
+# ╔═╡ 023e886e-1382-48cd-b81d-1646f3177d99
+typeof(colorant"green")
 
 # ╔═╡ 74b9375d-b5ee-4288-980a-300e8c204da3
 ga = viz_graph(mol_a)
@@ -149,13 +154,14 @@ begin
 	locs_x, locs_y = shell_layout(axb, nlist)
 	g = gplot(axb, locs_x, locs_y, 
 	      nodefillc = RGB(1.0,1.0,1.0),
+		# linetype="curve",
 	      nodestrokec=axb_colors,
 	      nodestrokelw=1,
 			# NODELABELSIZE=5.0,
 		  EDGELABELSIZE=5.0,
 	      NODESIZE=0.45 / sqrt(nv(axb)),
 	      nodelabel=axb_nodepair,
-	      EDGELINEWIDTH=15.0/nv(axb),
+	      EDGELINEWIDTH=25.0/nv(axb),
 	      edgelabel=axb_edgelabel,
 	      edgelabelsize=2.0)
 end
@@ -177,6 +183,7 @@ ne(axb)
 
 # ╔═╡ Cell order:
 # ╠═e85331d0-9732-11ec-350c-e7f3c76bca59
+# ╠═36af2a96-2edc-4163-9b90-c31dc72feb39
 # ╠═b73e7f22-cd3e-4e47-8561-220f9151f948
 # ╠═079b7e01-25f7-4e3e-90c3-4783c70b4790
 # ╠═daea02b2-2f26-4c78-b96f-82a524aff8c4
@@ -192,6 +199,7 @@ ne(axb)
 # ╠═a521f480-c5b5-4a60-8f9f-52b45ad39dac
 # ╠═179dc2b3-59be-4719-9cec-059dfa447301
 # ╠═eac14468-06d5-42ce-ac86-890ef38c0b00
+# ╠═023e886e-1382-48cd-b81d-1646f3177d99
 # ╠═74b9375d-b5ee-4288-980a-300e8c204da3
 # ╠═0703740d-c695-4792-ae0a-395a1da7e8f3
 # ╠═d134ca8b-f413-45f4-ac48-b3bb1decf089
