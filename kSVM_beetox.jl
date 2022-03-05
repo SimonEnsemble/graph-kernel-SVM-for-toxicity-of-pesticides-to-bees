@@ -152,9 +152,6 @@ end
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
 y = map(t -> class_to_int[t], toxicity)
 
-# ╔═╡ 378c17e6-83bd-4d88-9608-d00f813ad6bd
-sum(y .== -1)
-
 # ╔═╡ 9a6ce760-5da6-4c7e-9100-cd6676949bb1
 function viz_class_distn(y)	
 	fig = Figure(resolution=(300, 500))
@@ -166,6 +163,7 @@ function viz_class_distn(y)
 	)
 	barplot!(1:2, [sum(y .== l) for l in unique(y)], 
 		     color=[colors[int_to_class[l]] for l in unique(y)])
+	ylims!(0, nothing)
 	save("class_distn_$kernel.pdf", fig)
 	fig
 end
@@ -216,10 +214,10 @@ end
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 10
+	n_runs = 100
 	# list of C-params of the SVC to loop over as candidate hyperparams
 	if kernel == "fixed_length_rw_kernel"
-		Cs = 10 .^ range(-5, 2, length=15)
+		Cs = 10 .^ range(-5, 1, length=15)
 	else
 		Cs = 10 .^ range(-1, 3, length=15)
 	end
@@ -329,7 +327,7 @@ function viz_perf_over_kernel_params()
 		title="classifier performance on test set"
 	)
 	opt_L = kernel_params[argmax(mean_scores).I[2]]
-	vlines!(ax, [opt_L], linewidth=1, color=:gray, label="Lₒₚₜ", linestyle=:dash)
+	vl_p = vlines!(ax, [opt_L], linewidth=1, color=:gray, linestyle=:dash)
 	
 	viz_metric(accuracies, "accuracy", 1, :circle)
 	viz_metric(precisions, "precision", 2, :rect)
@@ -337,6 +335,7 @@ function viz_perf_over_kernel_params()
 	
 	ylims!(0.499, 1.001)
 	axislegend()
+	axislegend(ax, [vl_p], ["Lₒₚₜ"], "", position = :rb, orientation = :horizontal)
 	save("performance_$kernel.pdf", fig)
 	fig
 end
@@ -368,11 +367,18 @@ pre_test = mean(precisions[opt_kernel_param_id, :])
 # ╔═╡ 8699be2e-65aa-4817-ab17-1ec6cd742ed0
 rec_test = mean(recalls[opt_kernel_param_id, :])
 
+# ╔═╡ 11532634-1a3e-4286-8d1c-4d8b0043300a
+md"snippets of text"
+
+# ╔═╡ 34c7e5e2-2f86-434d-b782-ee607d0d284c
+"The optimal classifier, with walk length $(kernel_params[opt_kernel_param_id]), achieves a (mean over $n_runs runs) accuracy, precision, and recall of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), and $(round(rec_test,digits=2)) on a test data set." # abstract
+
 # ╔═╡ cb6b4422-bf1e-4363-8dc1-8129b56c3357
 "Our classifier achieves an accuracy, precision, and recall of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), and $(round(rec_test,digits=2))."
 
-# ╔═╡ 34c7e5e2-2f86-434d-b782-ee607d0d284c
-"The optimal classifier, with walk length $(kernel_params[opt_kernel_param_id]), achieves a (mean over $n_runs runs) accuracy, precision, and recall of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), and $(round(rec_test,digits=2)) on a test data set."
+# ╔═╡ af58bfc4-4b68-43ef-95ca-dab5943b60c8
+md"The optimal classifier, chosen by the mean product of recall and precision in the cross-validation procedure, used the $L_opt-RWGK and achieved a mean accuracy, precision, and recall of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), and $(round(rec_test,digits=2)). on the test data set.
+"
 
 # ╔═╡ 5617c798-98eb-4547-afaf-70227cf58056
 cm_opt = cms[opt_kernel_param_id]
@@ -1864,13 +1870,12 @@ version = "3.5.0+0"
 # ╠═8e00b53c-b2da-4f9d-bbd7-803021a36a0b
 # ╠═d8fff47e-bd94-498d-a2d8-11043b687503
 # ╠═bb0573df-790b-44f6-a373-09a7c91e35f0
-# ╟─79295613-923b-42a3-a31f-8ffe68aa8cb0
+# ╠═79295613-923b-42a3-a31f-8ffe68aa8cb0
 # ╠═efd8a5de-82f4-4255-9982-ff866937261f
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 # ╠═70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
 # ╠═008f0df9-5cdb-449d-a837-3d808536d30a
 # ╠═119ffdca-7f51-4e71-b825-843da6a75413
-# ╠═378c17e6-83bd-4d88-9608-d00f813ad6bd
 # ╠═9a6ce760-5da6-4c7e-9100-cd6676949bb1
 # ╠═e22a6f2b-053c-42e0-9f24-6ecd8b16fcf7
 # ╠═14d49e19-92e2-4127-9224-35d09e852447
@@ -1888,8 +1893,10 @@ version = "3.5.0+0"
 # ╠═f206780b-37a7-42d9-8aca-db53aad206ef
 # ╠═3e36201e-67a9-4d9f-9304-28c27f8b21e7
 # ╠═8699be2e-65aa-4817-ab17-1ec6cd742ed0
-# ╠═cb6b4422-bf1e-4363-8dc1-8129b56c3357
+# ╟─11532634-1a3e-4286-8d1c-4d8b0043300a
 # ╠═34c7e5e2-2f86-434d-b782-ee607d0d284c
+# ╠═cb6b4422-bf1e-4363-8dc1-8129b56c3357
+# ╟─af58bfc4-4b68-43ef-95ca-dab5943b60c8
 # ╠═5617c798-98eb-4547-afaf-70227cf58056
 # ╠═8d2dd082-b587-4bcc-9b5a-cf38375927ba
 # ╠═4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
