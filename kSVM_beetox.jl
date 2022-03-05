@@ -10,85 +10,90 @@ using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLear
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 md"# k-SVM on beetox data"
 
+# ╔═╡ 8e00b53c-b2da-4f9d-bbd7-803021a36a0b
+import MLJBase: partition
+
 # ╔═╡ d8fff47e-bd94-498d-a2d8-11043b687503
 Random.seed!(97330)
 
-# ╔═╡ f4b4bf52-0321-4883-873b-cbf692a51395
-set_theme!(
-Theme(                                                                         
-    palette = (color=[c for c in ColorSchemes.seaborn_muted6], marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross]),
-    textcolor = :gray30,                                                                    
-    linewidth=4,                                                                            
-    fontsize=20,                                                                            
-    #font="open-sans",                                                                      
-    font="Ubuntu Mono",                                                                     
-    resolution = (520, 400),                                                                
-    Axis = (                                                                                
-        #backgroundcolor = RGB(1.0, 1.0, 1.0),                                              
-        backgroundcolor = "mintcream",                                                      
-        xgridcolor = (:black, 0.15),                                                        
-        ygridcolor = (:black, 0.15),                                                        
-        xminorgridcolor = (:gray, 0.15),                                                    
-        yminorgridcolor = (:gray, 0.15),                                                    
-        leftspinevisible = false,                                                           
-        rightspinevisible = false,                                                          
-        ygridstyle=:dash,                                                                   
-        xgridstyle=:dash,                                                                   
-        bottomspinevisible = false,                                                         
-        topspinevisible = false,                                                            
-        xminorticksvisible = false,                                                         
-        yminorticksvisible = false,                                                         
-        xticksvisible = false,                                                              
-        yticksvisible = false,                                                              
-        xlabelpadding = 3,                                                                  
-        ylabelpadding = 3                                                                   
-    ),                                                                                      
-    Legend = (                                                                              
-        framevisible = true,                                                                
-        titlehalign=:left,                                                                  
-        titlesize=16,                                                                       
-        labelsize=16,                                                                       
-        framecolor=(:black, 0.5)                                                            
-        # padding = (1, 0, 0, 0),                                                           
-    ),                                                                                      
-    Axis3 = (                                                                               
-        xgridcolor = (:black, 0.07),                                                        
-        ygridcolor = (:black, 0.07),                                                        
-        zgridcolor = (:black, 0.07),                                                        
-        xspinesvisible = false,                                                             
-        yspinesvisible = false,                                                             
-        zspinesvisible = false,                                                             
-        xticksvisible = false,                                                              
-        yticksvisible = false,                                                              
-        zticksvisible = false,                                                              
-    ),                                                                                      
-    Colorbar = (                                                                            
-        ticksvisible = false,                                                               
-        spinewidth = 0,                                                                     
-        ticklabelpad = 5,                                                                   
-    )                                                                                       
-)                                                                                           
-)
+# ╔═╡ bb0573df-790b-44f6-a373-09a7c91e35f0
+"""
+	kf = stratified_KFolds(ids, k, y=y)
 
-# ╔═╡ 7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
-import MLUtils: splitobs, kfolds, shuffleobs
+Produces indices for K-folded data with stratification on `y`
+"""
+function stratified_kfolds(ids, k; y)
+	@assert length(ids) == length(y)
 
-# ╔═╡ 9e354dc9-d973-41c9-870f-fccd4ea66a41
-function splitobs_stratified(;at, y::Array, shuffle::Bool=true)
-	n_splits = length(at) + 1
-	the_splits = [Int[] for s = 1:n_splits]
-	for label in unique(y)
-		ids_this_label = filter(i -> y[i] == label, 1:length(y))
-		if shuffle
-			ids_this_label = shuffleobs(ids_this_label)
-		end
-		split_this_label = splitobs(ids_this_label, at=at)
-		for s = 1:n_splits
-			the_splits[s] = vcat(the_splits[s], split_this_label[s])
-		end
+	# partition data, stratified
+	kfs = partition(ids, [1 / k for i in 1:k-1]..., shuffle=true, stratify=y)
+
+	# build (train, test) tuples
+	tups = []
+	for fold_idx in 1:k
+		ids_test = kfs[fold_idx]
+		ids_train = vcat(kfs[[i for i in 1:k if i ≠ fold_idx]]...)
+		push!(tups, (ids_train, ids_test))
 	end
-	return the_splits
+	return tups
 end
+
+# ╔═╡ 79295613-923b-42a3-a31f-8ffe68aa8cb0
+set_theme!(
+	Theme(
+	    palette = (color=[c for c in ColorSchemes.seaborn_muted6], marker=[:circle, :utriangle, :cross, :rect, :diamond, :dtriangle, :pentagon, :xcross]),
+	    textcolor = :gray30,
+	    linewidth=4,
+	    fontsize=20,
+	    #font="open-sans",
+	    font="Ubuntu Mono",
+	    resolution = (520, 400),
+	    Axis = (
+	        #backgroundcolor = RGB(1.0, 1.0, 1.0),
+	        backgroundcolor = RGB(0.96, 1.0, 0.98),
+	        xgridcolor = (:black, 0.15),
+	        ygridcolor = (:black, 0.15),
+	        xminorgridcolor = (:gray, 0.15),
+	        yminorgridcolor = (:gray, 0.15),
+	        leftspinevisible = false,
+	        rightspinevisible = false,
+	        ygridstyle=:dash,
+	        xgridstyle=:dash,
+	        bottomspinevisible = false,
+	        topspinevisible = false,
+	        xminorticksvisible = false,
+	        yminorticksvisible = false,
+	        xticksvisible = false,
+	        yticksvisible = false,
+	        xlabelpadding = 3,
+	        ylabelpadding = 3
+	    ),
+	    Legend = (
+	        framevisible = true,
+	        titlehalign=:left,
+	        titlesize=16,
+	        labelsize=16,
+	        framecolor=(:black, 0.5)
+	        # padding = (1, 0, 0, 0),
+	    ),
+	    Axis3 = (
+	        xgridcolor = (:black, 0.07),
+	        ygridcolor = (:black, 0.07),
+	        zgridcolor = (:black, 0.07),
+	        xspinesvisible = false,
+	        yspinesvisible = false,
+	        zspinesvisible = false,
+	        xticksvisible = false,
+	        yticksvisible = false,
+	        zticksvisible = false,
+	    ),
+	    Colorbar = (
+	        ticksvisible = false,
+	        spinewidth = 0,
+	        ticklabelpad = 5,
+	    )
+	)
+)
 
 # ╔═╡ efd8a5de-82f4-4255-9982-ff866937261f
 begin
@@ -188,7 +193,7 @@ end
 # score according to precision * recall
 function cv_run(K::Matrix{Float64}, y::Vector{Int},
 	            ids_cv, n_folds::Int, Cs::Vector{Float64})
-	kf = kfolds(shuffleobs(1:length(ids_cv)), k=n_folds)
+	kf = stratified_kfolds(ids_cv, n_folds; y=y[ids_cv])
 
 	scores = zeros(length(Cs))
 	for (ids_cv_train, ids_cv_test) in kf
@@ -211,10 +216,10 @@ end
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 100
+	n_runs = 10
 	# list of C-params of the SVC to loop over as candidate hyperparams
 	if kernel == "fixed_length_rw_kernel"
-		Cs = 10 .^ range(-5, 1, length=15)
+		Cs = 10 .^ range(-5, 2, length=15)
 	else
 		Cs = 10 .^ range(-1, 3, length=15)
 	end
@@ -231,7 +236,7 @@ begin
 	for r = 1:n_runs		
 		println("run # =", r, " / ", n_runs)
 		# cv/test split. stratified
-		ids_cv, ids_test = splitobs_stratified(at=0.8, y=y)
+		ids_cv, ids_test = partition(1:length(y), 0.8, stratify=y, shuffle=true)
 		for i = 1:length(kernel_params)
 			# kernel matrix using this kernel param
 			K = Ks[i]
@@ -301,12 +306,6 @@ end
 # ╔═╡ 0905cfbe-16d5-4c2c-ba14-98be50d54bda
 viz_cv_results(kernel_params, Cs, mean_scores)
 
-# ╔═╡ e0251242-86c8-4fd8-818f-9364905338de
-argmax(mean_scores).I
-
-# ╔═╡ fd2835ea-1439-4131-b54f-0d0f060764f3
-mean_scores
-
 # ╔═╡ efeb6109-8355-4457-996e-e507390505d8
 function viz_perf_over_kernel_params()
 	
@@ -373,7 +372,7 @@ rec_test = mean(recalls[opt_kernel_param_id, :])
 "Our classifier achieves an accuracy, precision, and recall of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), and $(round(rec_test,digits=2))."
 
 # ╔═╡ 34c7e5e2-2f86-434d-b782-ee607d0d284c
-"The optimal classifier, with walk length $(kernel_params[opt_kernel_param_id]), achieves a (mean over $n_runs runs) accuracy, precision, and recall of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), and $(round(rec_test,digits=2)) on a test data set. "
+"The optimal classifier, with walk length $(kernel_params[opt_kernel_param_id]), achieves a (mean over $n_runs runs) accuracy, precision, and recall of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), and $(round(rec_test,digits=2)) on a test data set."
 
 # ╔═╡ 5617c798-98eb-4547-afaf-70227cf58056
 cm_opt = cms[opt_kernel_param_id]
@@ -421,7 +420,7 @@ Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-MLUtils = "f1d291b0-491e-4a28-83b9-f70985020b54"
+MLJBase = "a7f614a8-145f-11e9-1d2a-a57a1082229d"
 MolecularGraph = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
@@ -435,7 +434,7 @@ ColorSchemes = "~3.17.1"
 Colors = "~0.12.8"
 DataFrames = "~1.3.2"
 JLD2 = "~0.4.21"
-MLUtils = "~0.2.0"
+MLJBase = "~0.19.7"
 MolecularGraph = "~0.11.0"
 PlutoUI = "~0.7.35"
 ScikitLearn = "~0.6.4"
@@ -546,6 +545,18 @@ git-tree-sha1 = "f641eb0a4f00c343bbc32346e1217b86f3ce9dad"
 uuid = "49dc2e85-a5d0-5ad3-a950-438e2897f1b9"
 version = "0.5.1"
 
+[[deps.CategoricalArrays]]
+deps = ["DataAPI", "Future", "Missings", "Printf", "Requires", "Statistics", "Unicode"]
+git-tree-sha1 = "3b60064cb48efe986179359e08ffb568a6d510a2"
+uuid = "324d7699-5711-5eae-9e2f-1d82baa6b597"
+version = "0.10.3"
+
+[[deps.CategoricalDistributions]]
+deps = ["CategoricalArrays", "Distributions", "Missings", "OrderedCollections", "Random", "ScientificTypesBase", "UnicodePlots"]
+git-tree-sha1 = "8c340dc71d2dc9177b1f701726d08d2255d2d811"
+uuid = "af321ab8-2d2e-40a6-b165-3d674595d28e"
+version = "0.1.5"
+
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "32ad4ece064a61855a35bdc34e3da0b495e01169"
@@ -604,11 +615,22 @@ version = "3.41.0"
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 
+[[deps.ComputationalResources]]
+git-tree-sha1 = "52cb3ec90e8a8bea0e62e275ba577ad0f74821f7"
+uuid = "ed09eef8-17a6-5b46-8889-db040fac31e3"
+version = "0.3.2"
+
 [[deps.Conda]]
 deps = ["Downloads", "JSON", "VersionParsing"]
 git-tree-sha1 = "6e47d11ea2776bc5627421d59cdcc1296c058071"
 uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
 version = "1.7.0"
+
+[[deps.ConstructionBase]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "f74e9d5388b8620b4cee35d4c5a618dd4dc547f4"
+uuid = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
+version = "1.3.0"
 
 [[deps.Contour]]
 deps = ["StaticArrays"]
@@ -1015,6 +1037,11 @@ git-tree-sha1 = "ce08411caa70e0c9e780f142f59debd89a971738"
 uuid = "fc18253b-5e1b-504c-a4a2-9ece4944c004"
 version = "0.2.2"
 
+[[deps.LearnBase]]
+git-tree-sha1 = "a0d90569edd490b82fdc4dc078ea54a5a800d30a"
+uuid = "7f8f8fb0-2700-5f03-b4bd-41f8cfc144b6"
+version = "0.4.1"
+
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
@@ -1083,17 +1110,29 @@ version = "0.3.6"
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
+[[deps.LossFunctions]]
+deps = ["InteractiveUtils", "LearnBase", "Markdown", "RecipesBase", "StatsBase"]
+git-tree-sha1 = "0f057f6ea90a84e73a8ef6eebb4dc7b5c330020f"
+uuid = "30fc2ffe-d236-52d8-8643-a9d8f7c094a7"
+version = "0.7.2"
+
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "Pkg"]
 git-tree-sha1 = "5455aef09b40e5020e1520f551fa3135040d4ed0"
 uuid = "856f044c-d86e-5d09-b602-aeab76dc8ba7"
 version = "2021.1.1+2"
 
-[[deps.MLUtils]]
-deps = ["ChainRulesCore", "DelimitedFiles", "Random", "ShowCases", "Statistics", "StatsBase"]
-git-tree-sha1 = "37a7c99438c70d77ce75cf2e0d8b611bdd0fd5eb"
-uuid = "f1d291b0-491e-4a28-83b9-f70985020b54"
-version = "0.2.0"
+[[deps.MLJBase]]
+deps = ["CategoricalArrays", "CategoricalDistributions", "ComputationalResources", "Dates", "DelimitedFiles", "Distributed", "Distributions", "InteractiveUtils", "InvertedIndices", "LinearAlgebra", "LossFunctions", "MLJModelInterface", "Missings", "OrderedCollections", "Parameters", "PrettyTables", "ProgressMeter", "Random", "ScientificTypes", "StatisticalTraits", "Statistics", "StatsBase", "Tables"]
+git-tree-sha1 = "193521a6cdb0334ede6654508aa9d3acc05b633b"
+uuid = "a7f614a8-145f-11e9-1d2a-a57a1082229d"
+version = "0.19.7"
+
+[[deps.MLJModelInterface]]
+deps = ["Random", "ScientificTypesBase", "StatisticalTraits"]
+git-tree-sha1 = "2acb245e51225f1c43f1ec26879c564f9243b959"
+uuid = "e80e1ace-859a-464e-9ed9-23947d8ae3ea"
+version = "1.4.1"
 
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
@@ -1117,6 +1156,12 @@ version = "0.2.1"
 git-tree-sha1 = "e8b359ef06ec72e8c030463fe02efe5527ee5142"
 uuid = "dbb5928d-eab1-5f90-85c2-b9b0edb7c900"
 version = "0.4.1"
+
+[[deps.MarchingCubes]]
+deps = ["StaticArrays"]
+git-tree-sha1 = "f6dc3e93fa928bdd4a193d1209b62994a57e7590"
+uuid = "299715c1-40a9-479a-aaf9-4a633d36f717"
+version = "0.1.1"
 
 [[deps.Markdown]]
 deps = ["Base64"]
@@ -1386,6 +1431,11 @@ git-tree-sha1 = "01d341f502250e81f6fec0afe662aa861392a3aa"
 uuid = "c84ed2f1-dad5-54f0-aa8e-dbefe2724439"
 version = "0.4.2"
 
+[[deps.RecipesBase]]
+git-tree-sha1 = "6bf3f380ff52ce0832ddd3a2a7b9538ed1bcca7d"
+uuid = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
+version = "1.2.1"
+
 [[deps.Reexport]]
 git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
 uuid = "189a3867-3050-52da-a836-e630ba90ab69"
@@ -1429,6 +1479,17 @@ git-tree-sha1 = "9cc2955f2a254b18be655a4ee70bc4031b2b189e"
 uuid = "7b38b023-a4d7-4c5e-8d43-3f3097f304eb"
 version = "0.3.0"
 
+[[deps.ScientificTypes]]
+deps = ["CategoricalArrays", "ColorTypes", "Dates", "Distributions", "PrettyTables", "Reexport", "ScientificTypesBase", "StatisticalTraits", "Tables"]
+git-tree-sha1 = "ba70c9a6e4c81cc3634e3e80bb8163ab5ef57eb8"
+uuid = "321657f4-b219-11e9-178b-2701a2544e81"
+version = "3.0.0"
+
+[[deps.ScientificTypesBase]]
+git-tree-sha1 = "a8e18eb383b5ecf1b5e6fc237eb39255044fd92b"
+uuid = "30f210dd-8aff-4c5f-94ba-8e64358c1161"
+version = "3.0.0"
+
 [[deps.ScikitLearn]]
 deps = ["Compat", "Conda", "DataFrames", "Distributed", "IterTools", "LinearAlgebra", "MacroTools", "Parameters", "Printf", "PyCall", "Random", "ScikitLearnBase", "SparseArrays", "StatsBase", "VersionParsing"]
 git-tree-sha1 = "ccb822ff4222fcf6ff43bbdbd7b80332690f168e"
@@ -1459,11 +1520,6 @@ uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 [[deps.SharedArrays]]
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
-
-[[deps.ShowCases]]
-git-tree-sha1 = "7f534ad62ab2bd48591bdeac81994ea8c445e4a5"
-uuid = "605ecd9f-84a6-4c9e-81e2-4798472b76a3"
-version = "0.1.0"
 
 [[deps.Showoff]]
 deps = ["Dates", "Grisu"]
@@ -1519,6 +1575,12 @@ deps = ["LinearAlgebra", "Random", "Statistics"]
 git-tree-sha1 = "6354dfaf95d398a1a70e0b28238321d5d17b2530"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
 version = "1.4.0"
+
+[[deps.StatisticalTraits]]
+deps = ["ScientificTypesBase"]
+git-tree-sha1 = "271a7fea12d319f23d55b785c51f6876aadb9ac0"
+uuid = "64bff920-2084-43da-a3e6-9bb72801c0c9"
+version = "3.0.0"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -1617,6 +1679,18 @@ deps = ["REPL"]
 git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
 uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
 version = "0.4.1"
+
+[[deps.UnicodePlots]]
+deps = ["Contour", "Crayons", "Dates", "LinearAlgebra", "MarchingCubes", "NaNMath", "SparseArrays", "StaticArrays", "StatsBase", "Unitful"]
+git-tree-sha1 = "1785494cb9484f9ab05bbc9d81a2d4de4341eb39"
+uuid = "b8865327-cd53-5732-bb35-84acbb429228"
+version = "2.9.0"
+
+[[deps.Unitful]]
+deps = ["ConstructionBase", "Dates", "LinearAlgebra", "Random"]
+git-tree-sha1 = "b649200e887a487468b71821e2644382699f1b0f"
+uuid = "1986cc42-f94f-5a68-af5c-568840ba703d"
+version = "1.11.0"
 
 [[deps.Unmarshal]]
 deps = ["JSON", "LazyJSON", "Missings", "Nullables", "Requires"]
@@ -1787,10 +1861,10 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╟─a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 # ╠═985381fb-0f41-446a-869d-2ad8736b9403
+# ╠═8e00b53c-b2da-4f9d-bbd7-803021a36a0b
 # ╠═d8fff47e-bd94-498d-a2d8-11043b687503
-# ╠═f4b4bf52-0321-4883-873b-cbf692a51395
-# ╠═7dac3f2f-30d7-432d-9fa3-afc5fb1b9f36
-# ╠═9e354dc9-d973-41c9-870f-fccd4ea66a41
+# ╠═bb0573df-790b-44f6-a373-09a7c91e35f0
+# ╟─79295613-923b-42a3-a31f-8ffe68aa8cb0
 # ╠═efd8a5de-82f4-4255-9982-ff866937261f
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 # ╠═70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
@@ -1804,8 +1878,6 @@ version = "3.5.0+0"
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
 # ╠═aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
 # ╠═0905cfbe-16d5-4c2c-ba14-98be50d54bda
-# ╠═e0251242-86c8-4fd8-818f-9364905338de
-# ╠═fd2835ea-1439-4131-b54f-0d0f060764f3
 # ╠═efeb6109-8355-4457-996e-e507390505d8
 # ╠═3e1b3800-364d-445a-9417-a0ad103879d0
 # ╟─ef3dabd3-ac07-4796-a765-97a3bf465254
