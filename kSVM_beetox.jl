@@ -277,7 +277,7 @@ end
 function viz_cv_results(kernel_params, Cs, mean_scores)
 	cmap = ColorSchemes.linear_green_5_95_c69_n256
 
-	fig = Figure(resolution=(600, 500))
+	fig = Figure(resolution=(370, 500))
 
 	ax = Axis(fig[1, 1], 
 		      xlabel=kernel_param_name[kernel],
@@ -298,7 +298,8 @@ function viz_cv_results(kernel_params, Cs, mean_scores)
 	scatter!([id_x], [size(mean_scores)[1]- id_y + 1], 
 		marker=:star5, color="black", markersize=15)
 
-	Colorbar(fig[1, 2], hm, label="validation score")
+	Colorbar(fig[2, 1], hm, label="validation score",
+		vertical=false)
 	save("cv_heatmap_$kernel.pdf", fig)
 
 	return fig
@@ -357,7 +358,7 @@ function viz_perf_over_kernel_params(three_panel::Bool)
 	ylims!(0.45, 1.001)
 	xlims!(-0.2, 12.2)
 	axislegend(orientation=:horizontal)
-	axislegend(ax, [vl_p], ["Lₒₚₜ"], "", position = :rb, orientation = :horizontal)
+	axislegend(ax, [vl_p], ["Lₒₚₜ"], nothing, position = :rb, orientation = :horizontal)
 	save("performance_$kernel.pdf", fig)
 	fig
 end
