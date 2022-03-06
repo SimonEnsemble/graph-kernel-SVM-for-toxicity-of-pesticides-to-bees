@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.1
+# v0.18.0
 
 using Markdown
 using InteractiveUtils
@@ -149,9 +149,31 @@ begin
 	axb_edgelabel = [get_prop(axb, i, :bondorder) for i in 1:ne(axb)]
 	order_list = ["$i" for i = 1:nv(axb)]
 	nlist = Vector{Vector{Int}}(undef, 2) # two shells
-	nlist[1] = 1:7 # first shell
-	nlist[2] = 8:17 # second shell
-	locs_x, locs_y = shell_layout(axb, nlist)
+	nlist[1] = 1:6 # first shell
+	nlist[2] = 7:17 # second shell
+	@assert length(unique(vcat(nlist[1], nlist[2]))) == nv(axb)
+	_locs_x, _locs_y = shell_layout(axb, nlist)
+	locs_x = deepcopy(_locs_x)
+	locs_y = deepcopy(_locs_y)
+	# swap
+	locs_x[12] = _locs_x[13]
+	locs_x[13] = _locs_x[12]
+	locs_y[12] = _locs_y[13]
+	locs_y[13] = _locs_y[12]
+	
+	locs_x[9] = _locs_x[10]
+	locs_x[10] = _locs_x[9]
+	locs_y[9] = _locs_y[10]
+	locs_y[10] = _locs_y[9]
+
+	locs_x[1] = _locs_x[2]
+	locs_x[2] = _locs_x[1]
+	locs_y[1] = _locs_y[2]
+	locs_y[2] = _locs_y[1]
+	
+	locs_y[6] -= 0.1
+	locs_y[7] -= 0.1
+
 	g = gplot(axb, locs_x, locs_y, 
 	      nodefillc = RGB(1.0,1.0,1.0),
 		# linetype="curve",
@@ -160,7 +182,7 @@ begin
 			# NODELABELSIZE=5.0,
 		  EDGELABELSIZE=5.0,
 	      NODESIZE=0.45 / sqrt(nv(axb)),
-	      nodelabel=axb_nodepair,
+	      nodelabel=axb_nodepair, # change to orderlist to debug
 	      EDGELINEWIDTH=25.0/nv(axb),
 	      edgelabel=axb_edgelabel,
 	      edgelabelsize=2.0)
