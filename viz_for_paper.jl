@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.0
+# v0.18.1
 
 using Markdown
 using InteractiveUtils
@@ -103,7 +103,7 @@ function viz_graph(mol::GraphMol)
 	# locs_x, locs_y = circular_layout(graph)
 	gplot(graph, locs_x, locs_y,
 	      nodestrokec=[RGB(rgb.r/255, rgb.g/255, rgb.b/255) for rgb in atomcolor(mol)],
-		  nodefillc=RGB(1.0, 1.0, 1.0),
+		  nodefillc=RGBA(1.0, 1.0, 1.0, 0.0),
 		NODELABELSIZE=5.0,
 		EDGELABELSIZE=5.0,
           # nodefillc=RGB(1.0,1.0,1.0),
@@ -175,7 +175,7 @@ begin
 	locs_y[7] -= 0.1
 
 	g = gplot(axb, locs_x, locs_y, 
-	      nodefillc = RGB(1.0,1.0,1.0),
+	      nodefillc = RGBA(1.0,1.0,1.0, 0.0),
 		# linetype="curve",
 	      nodestrokec=axb_colors,
 	      nodestrokelw=1,
