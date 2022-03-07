@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.0
+# v0.18.1
 
 using Markdown
 using InteractiveUtils
@@ -115,20 +115,93 @@ function viz_graph(mol::GraphMol)
           edgelabel = edgelabels)
 end
 
-# ╔═╡ 023e886e-1382-48cd-b81d-1646f3177d99
-typeof(colorant"green")
+# ╔═╡ 26ac6c3c-6f60-46b7-af9d-b4c3c35295a8
+begin
+	graph_a = SimpleGraph(length(atomsymbol(mol_a)))
+    for (vᵢ, vⱼ) in mol_a.edges
+        add_edge!(graph_a, vᵢ, vⱼ)
+    end
+	
+    edgelabels = ["$b" for b in bondorder(mol_a)]
+    edgelabels[isaromaticbond(mol_a)] .= "a"
+
+	nodefill_a = []
+	for i = 1:length(atomsymbol(mol_a))
+		if 1<=i<=2 || i == 4 || 9<=i<=13
+			push!(nodefill_a, RGB(1.0,1.0,1.0))
+		else
+			push!(nodefill_a, RGB(1.0,0.988,0.0))
+		end
+	end
+
+	locs_x_a, locs_y_a = spring_layout(graph_a, C=0.25)
+	# locs_x, locs_y = circular_layout(graph)
+	gga = gplot(graph_a, locs_x_a, locs_y_a,
+	      nodestrokec=[RGB(rgb.r/255, rgb.g/255, rgb.b/255) for rgb in atomcolor(mol_a)],
+		  nodefillc=nodefill_a,
+		NODELABELSIZE=5.0,
+		EDGELABELSIZE=5.0,
+          # nodefillc=RGB(1.0,1.0,1.0),
+		EDGELINEWIDTH=20.0/nv(graph_a),
+	      # nodestrokec = colorant"black",
+	      nodestrokelw=3,
+          nodelabel=["$i" for i = 1:nv(graph_a)],
+          edgelinewidth=2,
+          edgelabel = edgelabels)
+end
+
+# ╔═╡ b89d2a05-b5d7-4aba-8a62-4c01e8ca59b0
+draw(PDF("graph_a_hl.pdf", 15cm, 15cm), gga)
+
+# ╔═╡ d7912d52-f141-4ed7-ac18-39a588891de6
+begin
+	graph_b = SimpleGraph(length(atomsymbol(mol_b)))
+    for (vᵢ, vⱼ) in mol_b.edges
+        add_edge!(graph_b, vᵢ, vⱼ)
+    end
+	
+    edgelabels_b = ["$b" for b in bondorder(mol_b)]
+    edgelabels_b[isaromaticbond(mol_b)] .= "a"
+
+	nodefill_b = []
+	for i = 1:length(atomsymbol(mol_b))
+		if 1<=i<=3
+			push!(nodefill_b, RGB(1.0,0.988,0.0))
+		else
+			push!(nodefill_b, RGB(1.0,1.0,1.0))
+		end
+	end
+
+	locs_x_b, locs_y_b = spring_layout(graph_b, C=0.25)
+	# locs_x, locs_y = circular_layout(graph)
+	ggb = gplot(graph_b, locs_x_b, locs_y_b,
+	      nodestrokec=[RGB(rgb.r/255, rgb.g/255, rgb.b/255) for rgb in atomcolor(mol_b)],
+		  nodefillc=nodefill_b,
+		NODELABELSIZE=5.0,
+		EDGELABELSIZE=5.0,
+          # nodefillc=RGB(1.0,1.0,1.0),
+		EDGELINEWIDTH=20.0/nv(graph_b),
+	      # nodestrokec = colorant"black",
+	      nodestrokelw=3,
+          nodelabel=["$i" for i = 1:nv(graph_b)],
+          edgelinewidth=2,
+          edgelabel = edgelabels_b)
+end
+
+# ╔═╡ 82d4d058-1ac5-4c2a-b85a-a45ded8fe082
+draw(PDF("graph_b_hl.pdf", 15cm, 15cm), ggb)
 
 # ╔═╡ 74b9375d-b5ee-4288-980a-300e8c204da3
 ga = viz_graph(mol_a)
 
 # ╔═╡ 0703740d-c695-4792-ae0a-395a1da7e8f3
-draw(PDF("graph_a.pdf", 15cm, 15cm), ga)
+draw(PDF("graph_a.pdf", 20cm, 20cm), ga)
 
 # ╔═╡ d134ca8b-f413-45f4-ac48-b3bb1decf089
 gb = viz_graph(mol_b)
 
 # ╔═╡ 305d0c8c-e8c1-4a9e-a51c-8630d8689ea8
-draw(PDF("graph_b.pdf", 15cm, 15cm), gb)
+draw(PDF("graph_b.pdf", 30cm, 30cm), gb)
 
 # ╔═╡ 3569a3dc-a1d4-4574-9e60-a254c53377f1
 axb = direct_product_graph(mol_a, mol_b, 
@@ -173,9 +246,19 @@ begin
 	
 	locs_y[6] -= 0.1
 	locs_y[7] -= 0.1
+	
+	# for highlight a walk example
+	# nodefill = []
+	# for i = 1:17
+	# 	if i == 14|| i == 12|| i == 5|| i == 8|| i == 10
+	# 		push!(nodefill, RGB(1.0, 0.988, 0.0))
+	# 	else
+	# 		push!(nodefill, RGB(1.0,1.0,1.0))
+	# 	end
+	# end
 
 	g = gplot(axb, locs_x, locs_y, 
-	      nodefillc = RGB(1.0,1.0,1.0),
+	      nodefillc = RGB(1.0, 1.0, 1.0), # change to nodefill to highlight
 		# linetype="curve",
 	      nodestrokec=axb_colors,
 	      nodestrokelw=1,
@@ -221,7 +304,10 @@ ne(axb)
 # ╠═a521f480-c5b5-4a60-8f9f-52b45ad39dac
 # ╠═179dc2b3-59be-4719-9cec-059dfa447301
 # ╠═eac14468-06d5-42ce-ac86-890ef38c0b00
-# ╠═023e886e-1382-48cd-b81d-1646f3177d99
+# ╠═26ac6c3c-6f60-46b7-af9d-b4c3c35295a8
+# ╠═b89d2a05-b5d7-4aba-8a62-4c01e8ca59b0
+# ╠═d7912d52-f141-4ed7-ac18-39a588891de6
+# ╠═82d4d058-1ac5-4c2a-b85a-a45ded8fe082
 # ╠═74b9375d-b5ee-4288-980a-300e8c204da3
 # ╠═0703740d-c695-4792-ae0a-395a1da7e8f3
 # ╠═d134ca8b-f413-45f4-ac48-b3bb1decf089
