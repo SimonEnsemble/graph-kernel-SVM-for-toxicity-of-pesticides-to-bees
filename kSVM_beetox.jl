@@ -277,7 +277,7 @@ end
 function viz_cv_results(kernel_params, Cs, mean_scores)
 	cmap = ColorSchemes.linear_green_5_95_c69_n256
 
-	fig = Figure(resolution=(370, 500))
+	fig = Figure(resolution=(400, 550))
 
 	ax = Axis(fig[1, 1], 
 		      xlabel=kernel_param_name[kernel],
@@ -287,7 +287,7 @@ function viz_cv_results(kernel_params, Cs, mean_scores)
 			          ["$p" for p in kernel_params]),
 			  yticks=(1:length(Cs), 
 			          reverse(["$(round(C, digits=5))" for C in Cs])),
-			  xticklabelrotation=kernel == "grw_kernel" ? π/2 : 0.0,
+			  xticklabelrotation=π / 2, #kernel == "grw_kernel" ? π/2 : 0.0,
 			  title="hyperparameter exploration\nvia $n_folds-folds cross-validation"
 	)
 
