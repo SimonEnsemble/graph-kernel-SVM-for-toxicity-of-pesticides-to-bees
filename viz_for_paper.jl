@@ -103,7 +103,7 @@ function viz_graph(mol::GraphMol)
 	# locs_x, locs_y = circular_layout(graph)
 	gplot(graph, locs_x, locs_y,
 	      nodestrokec=[RGB(rgb.r/255, rgb.g/255, rgb.b/255) for rgb in atomcolor(mol)],
-		  nodefillc=RGB(1.0, 1.0, 1.0),
+		  nodefillc=RGBA(1.0, 1.0, 1.0, 0.0),
 		NODELABELSIZE=5.0,
 		EDGELABELSIZE=5.0,
           # nodefillc=RGB(1.0,1.0,1.0),
@@ -127,8 +127,8 @@ begin
 
 	nodefill_a = []
 	for i = 1:length(atomsymbol(mol_a))
-		if 1<=i<=2 || i == 4 || 9<=i<=13
-			push!(nodefill_a, RGB(1.0,1.0,1.0))
+		if 1<=i<=2 || 5<=i<=6 || 9<=i<=13
+			push!(nodefill_a, RGBA(1.0,1.0,1.0,0.0))
 		else
 			push!(nodefill_a, RGB(1.0,0.988,0.0))
 		end
@@ -151,7 +151,7 @@ begin
 end
 
 # ╔═╡ b89d2a05-b5d7-4aba-8a62-4c01e8ca59b0
-draw(PDF("graph_a_hl.pdf", 15cm, 15cm), gga)
+draw(PDF("graph_a_hl.pdf", 20cm, 20cm), gga)
 
 # ╔═╡ d7912d52-f141-4ed7-ac18-39a588891de6
 begin
@@ -165,7 +165,7 @@ begin
 
 	nodefill_b = []
 	for i = 1:length(atomsymbol(mol_b))
-		if 1<=i<=3
+		if 1<=i<=3 || i == 5
 			push!(nodefill_b, RGB(1.0,0.988,0.0))
 		else
 			push!(nodefill_b, RGB(1.0,1.0,1.0))
@@ -195,13 +195,13 @@ draw(PDF("graph_b_hl.pdf", 15cm, 15cm), ggb)
 ga = viz_graph(mol_a)
 
 # ╔═╡ 0703740d-c695-4792-ae0a-395a1da7e8f3
-draw(PDF("graph_a.pdf", 20cm, 20cm), ga)
+draw(PDF("graph_a.pdf", 15cm, 15cm), ga)
 
 # ╔═╡ d134ca8b-f413-45f4-ac48-b3bb1decf089
 gb = viz_graph(mol_b)
 
 # ╔═╡ 305d0c8c-e8c1-4a9e-a51c-8630d8689ea8
-draw(PDF("graph_b.pdf", 30cm, 30cm), gb)
+draw(PDF("graph_b.pdf", 15cm, 15cm), gb)
 
 # ╔═╡ 3569a3dc-a1d4-4574-9e60-a254c53377f1
 axb = direct_product_graph(mol_a, mol_b, 
@@ -248,17 +248,17 @@ begin
 	locs_y[7] -= 0.1
 	
 	# for highlight a walk example
-	# nodefill = []
-	# for i = 1:17
-	# 	if i == 14|| i == 12|| i == 5|| i == 8|| i == 10
-	# 		push!(nodefill, RGB(1.0, 0.988, 0.0))
-	# 	else
-	# 		push!(nodefill, RGB(1.0,1.0,1.0))
-	# 	end
-	# end
+	nodefill = []
+	for i = 1:17
+		if i == 14|| i == 12|| i == 5|| i == 7
+			push!(nodefill, RGB(1.0, 0.988, 0.0))
+		else
+			push!(nodefill, RGBA(1.0,1.0,1.0,0.0))
+		end
+	end
 
 	g = gplot(axb, locs_x, locs_y, 
-	      nodefillc = RGB(1.0, 1.0, 1.0), # change to nodefill to highlight
+	      nodefillc = nodefill, # change to nodefill to highlight
 		# linetype="curve",
 	      nodestrokec=axb_colors,
 	      nodestrokelw=1,
