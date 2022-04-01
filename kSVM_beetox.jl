@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.1
+# v0.18.4
 
 using Markdown
 using InteractiveUtils
@@ -105,6 +105,7 @@ begin
 	@sk_import metrics: precision_score
 	@sk_import metrics: accuracy_score
 	@sk_import metrics: recall_score
+	@sk_import metrics: f1_score
 	@sk_import preprocessing: KernelCenterer
 end
 
@@ -232,6 +233,7 @@ begin
 	@assert class_to_int["Toxic"] == 1 # for toxic = "positive"
 	precisions  = zeros(length(kernel_params), n_runs)
 	recalls     = zeros(length(kernel_params), n_runs)
+	f1_scores   = zeros(length(kernel_params), n_runs)
 	# confusion matrices for each kernel param.
 	cms = [zeros(2, 2) for _ = 1:length(kernel_params)]
 	for r = 1:n_runs		
@@ -266,7 +268,8 @@ begin
 			accuracies[i, r] =  accuracy_score(y[ids_test], y_pred)
 			precisions[i, r] = precision_score(y[ids_test], y_pred)
 			recalls[i, r]    =    recall_score(y[ids_test], y_pred)
-			cms[i] +=          confusion_matrix(y[ids_test], y_pred)
+			f1_scores[i, r]  =        f1_score(y[ids_test], y_pred)
+			cms[i] +=         confusion_matrix(y[ids_test], y_pred)
 		end
 	end
 	mean_scores /= n_runs
@@ -350,10 +353,12 @@ function viz_perf_over_kernel_params(three_panel::Bool)
 	viz_bands(ax, accuracies, 1)
 	viz_bands(ax, precisions, 2)
 	viz_bands(ax, recalls, 3)
+	viz_bands(ax, f1_scores, 4)
 	
 	viz_metric(ax, accuracies, "accuracy", 1, :circle)
 	viz_metric(ax, precisions, "precision", 2, :rect)
 	viz_metric(ax, recalls, "recall", 3, :diamond)
+	viz_metric(ax, f1_scores, "f1 score", 4, :star4)
 	
 	ylims!(0.45, 1.001)
 	xlims!(-0.2, 12.2)
@@ -474,7 +479,7 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.1"
+julia_version = "1.7.2"
 manifest_format = "2.0"
 
 [[deps.AbstractFFTs]]
