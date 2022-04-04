@@ -280,7 +280,7 @@ end
 function viz_cv_results(kernel_params, Cs, mean_scores)
 	cmap = ColorSchemes.linear_green_5_95_c69_n256
 
-	fig = Figure(resolution=(400, 550))
+	fig = Figure(resolution=(425, 585))
 
 	ax = Axis(fig[1, 1], 
 		      xlabel=kernel_param_name[kernel],
@@ -291,7 +291,7 @@ function viz_cv_results(kernel_params, Cs, mean_scores)
 			  yticks=(1:length(Cs), 
 			          reverse(["$(round(C, digits=5))" for C in Cs])),
 			  xticklabelrotation=π / 2, #kernel == "grw_kernel" ? π/2 : 0.0,
-			  title="hyperparameter exploration\nvia $n_folds-folds cross-validation"
+			  title="hyperparameter exploration\n($n_folds-folds cross-validation)"
 	)
 
 	hm = heatmap!(reverse(mean_scores, dims=1)', colormap=cmap)
@@ -302,7 +302,7 @@ function viz_cv_results(kernel_params, Cs, mean_scores)
 		marker=:star5, color="black", markersize=15)
 
 	Colorbar(fig[2, 1], hm, label="validation F1 score",
-		vertical=false)
+		vertical=false, ticks=[0, 0.2, 0.4, 0.6])
 	save("cv_heatmap_$kernel.pdf", fig)
 
 	return fig
@@ -402,13 +402,13 @@ f1_test = mean(f1_scores[opt_kernel_param_id, :])
 md"snippets of text"
 
 # ╔═╡ 34c7e5e2-2f86-434d-b782-ee607d0d284c
-"The optimal classifier, with walk length $(kernel_params[opt_kernel_param_id]), achieves a (mean over $n_runs runs) accuracy, precision, and recall of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), and $(round(rec_test,digits=2)) on a test data set." # abstract
+md"The optimal classifier, with walk length $(kernel_params[opt_kernel_param_id]), achieves a (mean over $n_runs runs) accuracy, precision, recall, and F1 score of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), $(round(rec_test,digits=2)), and $(round(f1_test,digits=2)) on the test data set." # abstract
 
 # ╔═╡ cb6b4422-bf1e-4363-8dc1-8129b56c3357
-"Our classifier achieves an accuracy, precision, and recall of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), and $(round(rec_test,digits=2))."
+md"Our classifier achieves a test-set accuracy, precision, recall, and F1 score of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), $(round(rec_test,digits=2)), and $(round(f1_test,digits=2))."
 
 # ╔═╡ af58bfc4-4b68-43ef-95ca-dab5943b60c8
-md"The optimal classifier, chosen by the mean product of recall and precision in the cross-validation procedure, used the $L_opt-RWGK and achieved a mean accuracy, precision, and recall of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), and $(round(rec_test,digits=2)). on the test data set.
+md"The optimal classifier, chosen by the mean F1 score in the cross-validation procedure, used the $L_opt-RWGK and achieved a mean accuracy, precision, recall, and F1 score of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), $(round(rec_test,digits=2)), and $(round(f1_test,digits=2)) on the test data set.
 "
 
 # ╔═╡ 5617c798-98eb-4547-afaf-70227cf58056
