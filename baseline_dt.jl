@@ -20,6 +20,7 @@ begin
 	@sk_import metrics: accuracy_score
 	@sk_import metrics: recall_score
 	@sk_import metrics: f1_score
+	@sk_import model_selection: train_test_split
 end
 
 # ╔═╡ bd1083d1-6517-4ba9-b5fc-8542a4c06d84
@@ -28,6 +29,12 @@ data = CSV.read("new_smiles.csv", DataFrame)
 
 # ╔═╡ 9feee4af-80f6-4979-a1af-cbc5232a82b1
 toxicity = data[:, "Outcome"]
+
+# ╔═╡ 3fc1f194-0ef6-404b-82a0-108974bccdb2
+class_to_int = Dict("Toxic" => 1, "Nontoxic" => -1)
+
+# ╔═╡ 63c2c39f-698f-49d5-948f-aa93e1c0df9b
+y = Vector(map(t -> class_to_int[t], toxicity))
 
 # ╔═╡ 7d21181a-5177-48c2-8256-c242ae3130fc
 mols = [addhydrogens(smilestomol(smiles)) for smiles in data[:, "SMILES"]]
@@ -40,24 +47,30 @@ atom_no = [[length(atomsymbol(mol))] for mol in mols]
 # find molecular weight
 mw = [[exactmass(mol)[1]] for mol in mols]
 
-# ╔═╡ a04607a2-9551-480d-89d6-dc0361653a15
-begin
-	clf = DecisionTreeClassifier(max_depth=1)
-	clf.fit(atom_no, toxicity)
+# ╔═╡ c23919a5-be35-4588-b837-7e4d65b208e5
+train_test_split(1:382, test_size = 0.2)
+
+# ╔═╡ 108c7dec-efa5-414d-a2f5-bce1a9cc8b2b
+function accuracy_test(X::Vector, y::Vector, t::Int64)
+	accuracy, precision, recall = 0, 0, 0
+	for i = 1:t # t = run times
+		train_id, test_id = train_test_split(1:382, test_size=0.2)
+		dt = DecisionTreeClassifier(max_depth=1)
+		dt.fit(X[train_id], y[train_id])
+		y_pred = dt.predict(X[test_id])
+		accuracy  += accuracy_score(y[test_id], y_pred)
+		precision += precision_score(y[test_id], y_pred)
+		recall    += recall_score(y[test_id], y_pred)
+		#f1_score  += f1_score(y[test_id], y_pred)
+	end
+	return (accuracy, precision, recall) ./ t
 end
 
-# ╔═╡ 3e123e3a-b638-441f-b0ae-b13d6ac3da2d
-clf.score(atom_no, toxicity)
+# ╔═╡ fcf33baa-c814-489f-9197-6fdbc879a8df
+accuracy_test(mw, y, 100)
 
-# ╔═╡ 4c8c9297-e95d-4a00-83a8-0753c1ddc738
-begin
-	dt = DecisionTreeClassifier(max_depth=1)
-	dt.fit(mw, toxicity)
-	dt.score(mw, toxicity)
-end
-
-# ╔═╡ 4518a84e-563c-4e91-94f1-5215607c0f76
-# Train a cross-validation split
+# ╔═╡ 1c28399f-6a05-4dc3-bb16-b4852222112d
+accuracy_test(atom_no, y, 100)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -567,12 +580,14 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═955c39b4-8916-4dd6-b016-da2eb081e119
 # ╠═bd1083d1-6517-4ba9-b5fc-8542a4c06d84
 # ╠═9feee4af-80f6-4979-a1af-cbc5232a82b1
+# ╠═3fc1f194-0ef6-404b-82a0-108974bccdb2
+# ╠═63c2c39f-698f-49d5-948f-aa93e1c0df9b
 # ╠═7d21181a-5177-48c2-8256-c242ae3130fc
 # ╠═37c2a82b-2eee-4ba6-9cca-cd39e97f71d0
 # ╠═07460203-948d-4714-9cd6-ee0d2f91cb94
-# ╠═a04607a2-9551-480d-89d6-dc0361653a15
-# ╠═3e123e3a-b638-441f-b0ae-b13d6ac3da2d
-# ╠═4c8c9297-e95d-4a00-83a8-0753c1ddc738
-# ╠═4518a84e-563c-4e91-94f1-5215607c0f76
+# ╠═c23919a5-be35-4588-b837-7e4d65b208e5
+# ╠═108c7dec-efa5-414d-a2f5-bce1a9cc8b2b
+# ╠═fcf33baa-c814-489f-9197-6fdbc879a8df
+# ╠═1c28399f-6a05-4dc3-bb16-b4852222112d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
