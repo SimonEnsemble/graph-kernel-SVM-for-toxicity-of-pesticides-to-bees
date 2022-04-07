@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.4
+# v0.18.1
 
 using Markdown
 using InteractiveUtils
@@ -7,10 +7,11 @@ using InteractiveUtils
 # ╔═╡ a9d0513d-932f-455a-bc5d-6f4c5772837f
 using CSV, DataFrames, ScikitLearn, MolecularGraph
 
+# ╔═╡ 5e75f05f-c995-451b-90be-55dfd1081293
+import ScikitLearn: CrossValidation
+
 # ╔═╡ 12d7a090-b474-11ec-0118-4305de395f24
 md"# Baseline Decision Tree
-
-Write a code for train a decision tree on both molecular weight and size of graph.
 "
 
 # ╔═╡ 955c39b4-8916-4dd6-b016-da2eb081e119
@@ -20,7 +21,6 @@ begin
 	@sk_import metrics: accuracy_score
 	@sk_import metrics: recall_score
 	@sk_import metrics: f1_score
-	@sk_import model_selection: train_test_split
 end
 
 # ╔═╡ bd1083d1-6517-4ba9-b5fc-8542a4c06d84
@@ -47,30 +47,27 @@ atom_no = [[length(atomsymbol(mol))] for mol in mols]
 # find molecular weight
 mw = [[exactmass(mol)[1]] for mol in mols]
 
-# ╔═╡ c23919a5-be35-4588-b837-7e4d65b208e5
-train_test_split(1:382, test_size = 0.2)
-
 # ╔═╡ 108c7dec-efa5-414d-a2f5-bce1a9cc8b2b
 function accuracy_test(X::Vector, y::Vector, t::Int64)
-	accuracy, precision, recall = 0, 0, 0
+	accuracy, precision, recall, f1score = 0, 0, 0, 0
 	for i = 1:t # t = run times
-		train_id, test_id = train_test_split(1:382, test_size=0.2)
+		train_id, test_id = CrossValidation.train_test_split(1:382, test_size=0.2)
 		dt = DecisionTreeClassifier(max_depth=1)
 		dt.fit(X[train_id], y[train_id])
 		y_pred = dt.predict(X[test_id])
 		accuracy  += accuracy_score(y[test_id], y_pred)
 		precision += precision_score(y[test_id], y_pred)
 		recall    += recall_score(y[test_id], y_pred)
-		#f1_score  += f1_score(y[test_id], y_pred)
+		f1score   += f1_score(y[test_id], y_pred)
 	end
-	return (accuracy, precision, recall) ./ t
+	return (accuracy, precision, recall, f1score) ./ t
 end
 
 # ╔═╡ fcf33baa-c814-489f-9197-6fdbc879a8df
-accuracy_test(mw, y, 100)
+accuracy_test(mw, y, 500)
 
 # ╔═╡ 1c28399f-6a05-4dc3-bb16-b4852222112d
-accuracy_test(atom_no, y, 100)
+accuracy_test(atom_no, y, 500)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -576,6 +573,7 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 
 # ╔═╡ Cell order:
 # ╠═a9d0513d-932f-455a-bc5d-6f4c5772837f
+# ╠═5e75f05f-c995-451b-90be-55dfd1081293
 # ╟─12d7a090-b474-11ec-0118-4305de395f24
 # ╠═955c39b4-8916-4dd6-b016-da2eb081e119
 # ╠═bd1083d1-6517-4ba9-b5fc-8542a4c06d84
@@ -585,7 +583,6 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═7d21181a-5177-48c2-8256-c242ae3130fc
 # ╠═37c2a82b-2eee-4ba6-9cca-cd39e97f71d0
 # ╠═07460203-948d-4714-9cd6-ee0d2f91cb94
-# ╠═c23919a5-be35-4588-b837-7e4d65b208e5
 # ╠═108c7dec-efa5-414d-a2f5-bce1a9cc8b2b
 # ╠═fcf33baa-c814-489f-9197-6fdbc879a8df
 # ╠═1c28399f-6a05-4dc3-bb16-b4852222112d
