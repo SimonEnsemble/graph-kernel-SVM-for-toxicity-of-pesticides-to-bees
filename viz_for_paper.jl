@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.1
+# v0.18.4
 
 using Markdown
 using InteractiveUtils
@@ -84,10 +84,10 @@ begin
 end
 
 # ╔═╡ a521f480-c5b5-4a60-8f9f-52b45ad39dac
-run(`inkscape molecule_a.svg --export-pdf=molecule_a.pdf`)
+run(`inkscape molecule_a.svg --export-pdf=Fig2a_molecule_a.pdf`)
 
 # ╔═╡ 179dc2b3-59be-4719-9cec-059dfa447301
-run(`inkscape molecule_b.svg --export-pdf=molecule_b.pdf`)
+run(`inkscape molecule_b.svg --export-pdf=Fig2b_molecule_b.pdf`)
 
 # ╔═╡ eac14468-06d5-42ce-ac86-890ef38c0b00
 function viz_graph(mol::GraphMol)
@@ -151,7 +151,7 @@ begin
 end
 
 # ╔═╡ b89d2a05-b5d7-4aba-8a62-4c01e8ca59b0
-draw(PDF("graph_a_hl.pdf", 20cm, 20cm), gga)
+draw(PDF("Fig2c_graph_a_hl.pdf", 20cm, 20cm), gga)
 
 # ╔═╡ d7912d52-f141-4ed7-ac18-39a588891de6
 begin
@@ -189,19 +189,7 @@ begin
 end
 
 # ╔═╡ 82d4d058-1ac5-4c2a-b85a-a45ded8fe082
-draw(PDF("graph_b_hl.pdf", 15cm, 15cm), ggb)
-
-# ╔═╡ 74b9375d-b5ee-4288-980a-300e8c204da3
-ga = viz_graph(mol_a)
-
-# ╔═╡ 0703740d-c695-4792-ae0a-395a1da7e8f3
-draw(PDF("graph_a.pdf", 15cm, 15cm), ga)
-
-# ╔═╡ d134ca8b-f413-45f4-ac48-b3bb1decf089
-gb = viz_graph(mol_b)
-
-# ╔═╡ 305d0c8c-e8c1-4a9e-a51c-8630d8689ea8
-draw(PDF("graph_b.pdf", 15cm, 15cm), gb)
+draw(PDF("Fig2d_graph_b_hl.pdf", 15cm, 15cm), ggb)
 
 # ╔═╡ 3569a3dc-a1d4-4574-9e60-a254c53377f1
 axb = direct_product_graph(mol_a, mol_b, 
@@ -272,7 +260,7 @@ begin
 end
 
 # ╔═╡ ee75cb9c-6cae-4a38-bb1c-57af21f6dfd7
-draw(PDF("dpg_example.pdf", 16cm, 16cm), g)
+draw(PDF("Fig2e_dpg_example.pdf", 16cm, 16cm), g)
 
 # ╔═╡ 4dbcad70-c777-44b9-b838-810d0f258eaf
 fixed_length_rw_kernel(mol_a, mol_b, 0)
@@ -308,10 +296,6 @@ ne(axb)
 # ╠═b89d2a05-b5d7-4aba-8a62-4c01e8ca59b0
 # ╠═d7912d52-f141-4ed7-ac18-39a588891de6
 # ╠═82d4d058-1ac5-4c2a-b85a-a45ded8fe082
-# ╠═74b9375d-b5ee-4288-980a-300e8c204da3
-# ╠═0703740d-c695-4792-ae0a-395a1da7e8f3
-# ╠═d134ca8b-f413-45f4-ac48-b3bb1decf089
-# ╠═305d0c8c-e8c1-4a9e-a51c-8630d8689ea8
 # ╠═3569a3dc-a1d4-4574-9e60-a254c53377f1
 # ╠═64c7263e-e959-4068-a4d7-9f1c806ee893
 # ╠═0b7d99ac-a23d-4ced-8b27-f57741924bc9
