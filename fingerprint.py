@@ -20,13 +20,13 @@ n = len(fps_morgan)
 K_morgan = np.eye(n)
 for i in range(n):
     for j in range(n):
-        K_morgan[i, j] = DataStructs.DiceSimilarity(fps_morgan[i], fps_morgan[j])
+        K_morgan[i, j] = DataStructs.TanimotoSimilarity(fps_morgan[i], fps_morgan[j])
 
-np.save('MFDSK', K_morgan)
+np.save('MFTSK', K_morgan)
 
 K_maccs = np.eye(n)
 for i in range(n):
     for j in range(n):
-        K_maccs[i, j] = DataStructs.FingerprintSimilarity(fps_MACCS[i],fps_MACCS[j])
+        K_maccs[i, j] = DataStructs.TanimotoSimilarity(fps_MACCS[i],fps_MACCS[j])
 
-np.save('MACCSFSK', K_maccs)
+np.save('MACCSTSK', K_maccs)
