@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 985381fb-0f41-446a-869d-2ad8736b9403
-using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI, StatsBase,MolecularGraph, Colors, Random
+using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI, StatsBase,MolecularGraph, Colors, Random, NPZ
 
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 md"# k-SVM on beetox data"
@@ -139,6 +139,8 @@ end
 
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
 begin
+	K_fp = npzread("MACCSTSK.npy")
+
 	Ks = []
 	toxicity = []
 	mols = []
@@ -234,12 +236,20 @@ begin
 	precisions  = zeros(length(kernel_params), n_runs)
 	recalls     = zeros(length(kernel_params), n_runs)
 	f1_scores   = zeros(length(kernel_params), n_runs)
+	accuracies_fp  = zeros(n_runs)
+	precisions_fp  = zeros(n_runs)
+	recalls_fp     = zeros(n_runs)
+	f1_scores_fp   = zeros(n_runs)
 	# confusion matrices for each kernel param.
 	cms = [zeros(2, 2) for _ = 1:length(kernel_params)]
 	for r = 1:n_runs		
 		println("run # =", r, " / ", n_runs)
 		# cv/test split. stratified
 		ids_cv, ids_test = partition(1:length(y), 0.8, stratify=y, shuffle=true)
+		#= 
+		random walk kernel representation
+		=#
+		# loop over kernel params
 		for i = 1:length(kernel_params)
 			# kernel matrix using this kernel param
 			K = Ks[i]
@@ -264,6 +274,7 @@ begin
 			K_test  = K[ids_test, ids_cv]
 			K_test_centered = tf.transform(K_test)
 			y_pred = svc.predict(K_test_centered)
+			
 			# store performance metrics
 			accuracies[i, r] =  accuracy_score(y[ids_test], y_pred)
 			precisions[i, r] = precision_score(y[ids_test], y_pred)
@@ -271,6 +282,27 @@ begin
 			f1_scores[i, r]  =        f1_score(y[ids_test], y_pred)
 			cms[i] +=         confusion_matrix(y[ids_test], y_pred)
 		end
+		#= 
+		fingerprint representation
+		=#
+		# cross-validation to find optimal C
+		scores_fp = cv_run(K_fp, y, ids_cv, n_folds, Cs)
+		C_opt_fp = Cs[argmax(scores_fp)]
+
+		# train with optimal C on all cv data
+		K_train_fp = K_fp[ids_cv, ids_cv]
+		svc_fp, tf_fp = train_svm(K_train_fp, y[ids_cv], C_opt_fp)
+
+		# score deployment svm on test data
+		K_test_fp  = K_fp[ids_test, ids_cv]
+		K_test_centered_fp = tf_fp.transform(K_test_fp)
+		y_pred_fp = svc_fp.predict(K_test_centered_fp)
+		
+		# store performance metrics
+		accuracies_fp[r] =  accuracy_score(y[ids_test], y_pred_fp)
+		precisions_fp[r] = precision_score(y[ids_test], y_pred_fp)
+		recalls_fp[r]    =    recall_score(y[ids_test], y_pred_fp)
+		f1_scores_fp[r]  =        f1_score(y[ids_test], y_pred_fp)
 	end
 	mean_scores /= n_runs
 	cms /= n_runs
@@ -339,6 +371,21 @@ function viz_perf_over_kernel_params(three_panel::Bool)
 		lines!(ax, kernel_params, μ, color=my_colors[i])
 	end
 
+	function viz_metric_fp(ax, x, label, i, marker; std_err=false, viz_ebars=false)
+		# compute mean, std of metric over the runs
+		μ = mean(x)
+		σ = std(x)
+		ebars = σ 
+		if std_err
+			ebars /= sqrt(n_runs)
+		end
+		# plot point
+		scatter!(ax, [i], [μ], label=label, 
+			color=my_colors[i], markersize=16, marker=marker)
+		errorbars!(ax, [i], [μ], [ebars], color=(my_colors[i], 0.5))
+	end
+
+
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
 		xlabel=kernel_param_name[kernel],
@@ -347,6 +394,14 @@ function viz_perf_over_kernel_params(three_panel::Bool)
 		yticks=0.5:0.1:1.0,
 		title="classifier performance on test set"
 	)
+	
+	ax_fp = Axis(fig[1, 2], xlabel="MACCS\nfingerprint", xticks=[0])
+	colsize!(fig.layout, 1, Auto(5))
+	hideydecorations!(ax_fp, grid=false)
+	xlims!(ax_fp, 0.8, 3.2)
+
+	linkyaxes!(ax, ax_fp)
+	
 	opt_L = kernel_params[argmax(mean_scores).I[2]]
 	vl_p = vlines!(ax, [opt_L], linewidth=1, color=:gray, linestyle=:dash)
 	
@@ -359,11 +414,16 @@ function viz_perf_over_kernel_params(three_panel::Bool)
 	viz_metric(ax, precisions, "precision", 2, :rect)
 	viz_metric(ax, recalls, "recall", 3, :diamond)
 	# viz_metric(ax, f1_scores, "F1 score", 4, :star4)
+
+	viz_metric_fp(ax_fp, accuracies_fp, "accuracy", 1, :circle)
+	viz_metric_fp(ax_fp, precisions_fp, "precision", 2, :rect)
+	viz_metric_fp(ax_fp, recalls_fp, "recall", 3, :diamond)
 	
-	ylims!(0.45, 1.001)
-	xlims!(-0.2, 12.2)
-	axislegend(orientation=:horizontal)
-	axislegend(ax, [vl_p], ["Lₒₚₜ"], nothing, position = :rb, orientation = :horizontal)
+	ylims!(ax, 0.45, 1.001)
+	xlims!(ax, -0.2, 12.2)
+	axislegend(ax, orientation=:horizontal)
+	axislegend(ax, [vl_p], ["Lₒₚₜ"], nothing, 
+		position = :rb, orientation = :horizontal)
 	save("performance_$kernel.pdf", fig)
 	fig
 end
@@ -397,6 +457,9 @@ rec_test = mean(recalls[opt_kernel_param_id, :])
 
 # ╔═╡ 87c68781-21f2-4dfd-ad17-35e69fd24853
 f1_test = mean(f1_scores[opt_kernel_param_id, :])
+
+# ╔═╡ d31e46e0-efed-48df-981d-a7318a9c58e1
+acc_test_fp, pre_test_fp, rec_test_fp, f1_test_fp = mean(accuracies_fp), mean(precisions_fp), mean(recalls_fp), mean(f1_scores_fp)
 
 # ╔═╡ 11532634-1a3e-4286-8d1c-4d8b0043300a
 md"snippets of text"
@@ -459,6 +522,7 @@ JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MLJBase = "a7f614a8-145f-11e9-1d2a-a57a1082229d"
 MolecularGraph = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
+NPZ = "15e1cf62-19b3-5cfa-8e77-841668bca605"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 ScikitLearn = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
@@ -473,6 +537,7 @@ DataFrames = "~1.3.2"
 JLD2 = "~0.4.21"
 MLJBase = "~0.19.7"
 MolecularGraph = "~0.11.0"
+NPZ = "~0.4.1"
 PlutoUI = "~0.7.35"
 ScikitLearn = "~0.6.4"
 StatsBase = "~0.33.16"
@@ -482,8 +547,9 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.2"
+julia_version = "1.8.0-DEV.1390"
 manifest_format = "2.0"
+project_hash = "ec26fd050001a77302d3655a9d266d47d9359585"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -516,6 +582,7 @@ version = "0.4.1"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
+version = "1.1.1"
 
 [[deps.ArrayInterface]]
 deps = ["Compat", "IfElse", "LinearAlgebra", "Requires", "SparseArrays", "Static"]
@@ -645,6 +712,7 @@ version = "3.42.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
+version = "0.5.0+0"
 
 [[deps.ComputationalResources]]
 git-tree-sha1 = "52cb3ec90e8a8bea0e62e275ba577ad0f74821f7"
@@ -727,8 +795,9 @@ uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.8.6"
 
 [[deps.Downloads]]
-deps = ["ArgTools", "LibCURL", "NetworkOptions"]
+deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+version = "1.6.0"
 
 [[deps.EarCut_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -783,6 +852,9 @@ deps = ["Compat", "Dates", "Mmap", "Printf", "Test", "UUIDs"]
 git-tree-sha1 = "129b104185df66e408edd6625d480b7f9e9823a0"
 uuid = "48062228-2e41-5def-b9a4-89aafe57970f"
 version = "0.9.18"
+
+[[deps.FileWatching]]
+uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -1064,10 +1136,12 @@ version = "0.4.1"
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
+version = "0.6.3"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
+version = "7.73.0+4"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -1076,6 +1150,7 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
+version = "1.9.1+2"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -1200,6 +1275,7 @@ version = "0.2.1"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+version = "2.24.0+2"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -1224,6 +1300,13 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
+version = "2020.7.22"
+
+[[deps.NPZ]]
+deps = ["Compat", "ZipFile"]
+git-tree-sha1 = "fbfb3c151b0308236d854c555b43cdd84c1e5ebf"
+uuid = "15e1cf62-19b3-5cfa-8e77-841668bca605"
+version = "0.4.1"
 
 [[deps.NaNMath]]
 git-tree-sha1 = "b086b7ea07f8e38cf122f5016af580881ac914fe"
@@ -1238,6 +1321,7 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
+version = "1.2.0"
 
 [[deps.Nullables]]
 git-tree-sha1 = "8f87854cc8f3685a60689d8edecaa29d2251979b"
@@ -1264,6 +1348,7 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+version = "0.3.17+2"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -1280,6 +1365,7 @@ version = "3.1.1+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
+version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1361,6 +1447,7 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -1486,6 +1573,7 @@ version = "0.3.0+0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "0.7.0"
 
 [[deps.SIMD]]
 git-tree-sha1 = "7dbc15af7ed5f751a82bf3ed37757adf76c32402"
@@ -1642,6 +1730,7 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+version = "1.0.0"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
@@ -1658,6 +1747,7 @@ version = "1.7.0"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -1800,9 +1890,16 @@ git-tree-sha1 = "3c6e8b9f5cdaaa21340f841653942e1a6b6561e5"
 uuid = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 version = "0.4.7"
 
+[[deps.ZipFile]]
+deps = ["Libdl", "Printf", "Zlib_jll"]
+git-tree-sha1 = "3593e69e469d2111389a9bd06bac1f3d730ac6de"
+uuid = "a5390f91-8eb1-5f08-bee0-b1d1ffed6cea"
+version = "0.9.4"
+
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
+version = "1.2.12+1"
 
 [[deps.coordgenlibs_jll]]
 deps = ["Libdl", "Pkg"]
@@ -1825,6 +1922,7 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+version = "4.0.0+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1859,10 +1957,12 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+version = "1.41.0+1"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+version = "16.2.1+1"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1908,6 +2008,7 @@ version = "3.5.0+0"
 # ╠═3e36201e-67a9-4d9f-9304-28c27f8b21e7
 # ╠═8699be2e-65aa-4817-ab17-1ec6cd742ed0
 # ╠═87c68781-21f2-4dfd-ad17-35e69fd24853
+# ╠═d31e46e0-efed-48df-981d-a7318a9c58e1
 # ╟─11532634-1a3e-4286-8d1c-4d8b0043300a
 # ╠═34c7e5e2-2f86-434d-b782-ee607d0d284c
 # ╠═cb6b4422-bf1e-4363-8dc1-8129b56c3357
