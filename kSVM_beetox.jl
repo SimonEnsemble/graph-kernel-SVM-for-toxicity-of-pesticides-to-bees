@@ -162,6 +162,14 @@ begin
 		mols = load(jldfilename, "mols")
 		toxicity = Vector(load(jldfilename, "toxicity"))
 		K        = load(jldfilename, "K")
+		@info "scaling by size of molecules"
+		for i = 1:length(toxicity)
+			for j = 1:length(toxicity)
+				nᵢ = length(atomsymbol(mols[i]))
+				nⱼ = length(atomsymbol(mols[i]))
+				K[i, j] /= nᵢ * nⱼ
+			end
+		end
 		push!(Ks, K)
 	end
 	Ks
@@ -206,7 +214,7 @@ function compare_similarities(K₁::Matrix{Float64}, K₂::Matrix{Float64},
 end
 
 # ╔═╡ 4c01515b-b2a2-425f-a258-4e6c0b9ba7e7
-compare_similarities(K_fp, Ks[5], "TS of MACCS FP", "k RWK", hi=5e4)
+compare_similarities(K_fp, Ks[5], "TS of MACCS FP", "k RWK")
 
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
 y = map(t -> class_to_int[t], toxicity) # target vector
@@ -275,18 +283,16 @@ begin
 	n_folds = 3
 	n_runs = 1
 	# list of C-params of the SVC to loop over as candidate hyperparams
-	if kernel == "fixed_length_rw_kernel"
-		Cs = 10 .^ range(-5, 1, length=15)
-	else
-		Cs = 10 .^ range(-1, 3, length=15)
-	end
+	Cs = 10 .^ range(-5, 1.5, length=20)
+	# Cs = 10 .^ range(-1, 3, length=15) for grwk
 
-	# store cross-validation accuracy
-	mean_scores = zeros(length(Cs), length(kernel_params))
+	# store cross-validation scores
+	mean_scores    = zeros(length(Cs), length(kernel_params))
 	mean_scores_fp = zeros(length(Cs))
+	
 	# store test set performance metrics
-	accuracies  = zeros(length(kernel_params), n_runs)
 	@assert class_to_int["Toxic"] == 1 # for toxic = "positive"
+	accuracies  = zeros(length(kernel_params), n_runs)
 	precisions  = zeros(length(kernel_params), n_runs)
 	recalls     = zeros(length(kernel_params), n_runs)
 	f1_scores   = zeros(length(kernel_params), n_runs)
@@ -294,12 +300,15 @@ begin
 	precisions_fp  = zeros(n_runs)
 	recalls_fp     = zeros(n_runs)
 	f1_scores_fp   = zeros(n_runs)
+	
 	# confusion matrices for each kernel param.
 	cms = [zeros(2, 2) for _ = 1:length(kernel_params)]
+	
 	for r = 1:n_runs		
 		println("run # =", r, " / ", n_runs)
-		# cv/test split. stratified
+		# cv/test split. stratified by label.
 		ids_cv, ids_test = partition(1:length(y), 0.8, stratify=y, shuffle=true)
+		
 		#= 
 		random walk kernel representation
 		=#
@@ -319,7 +328,7 @@ begin
 			C_opt = Cs[argmax(scores)]
 
 			#=
-			train and evaluate deployment SVM on test data
+			train on all CV data, evaluate deployment SVM on test data
 			=#
 			K_train = K[ids_cv, ids_cv]
 			svc, tf = train_svm(K_train, y[ids_cv], C_opt)
@@ -336,6 +345,7 @@ begin
 			f1_scores[i, r]  =        f1_score(y[ids_test], y_pred)
 			cms[i] +=         confusion_matrix(y[ids_test], y_pred)
 		end
+		
 		#= 
 		fingerprint representation
 		=#
