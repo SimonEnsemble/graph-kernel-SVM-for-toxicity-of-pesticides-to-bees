@@ -5,24 +5,22 @@ from rdkit.Chem import MACCSkeys
 import pandas as pd
 import numpy as np
 
+# load bee tox data
 df = pd.read_csv("new_smiles.csv")
 
-fps_morgan = []
-fps_MACCS  = []
+# compute and store fingerprints here.
+fps  = []
 for smile in df["SMILES"]:
     m = Chem.MolFromSmiles(smile)
-    fp_morgan = AllChem.GetMorganFingerprint(m, 4)
-    fp_MACCS  = MACCSkeys.GenMACCSKeys(m)
-    fps_morgan.append(fp_morgan)
-    fps_MACCS.append(fp_MACCS)
+    fps.append(
+        MACCSkeys.GenMACCSKeys(m)
+    )
 
-n = len(fps_morgan)
-K_morgan = np.eye(n)
-K_maccs = np.eye(n)
+# compute pairwise similarity matrix
+n = len(fps)
+K = np.eye(n)
 for i in range(n):
     for j in range(n):
-        K_morgan[i, j] = DataStructs.TanimotoSimilarity(fps_morgan[i], fps_morgan[j])
-        K_maccs[i, j]  = DataStructs.TanimotoSimilarity(fps_MACCS[i],fps_MACCS[j])
+        K[i, j]  = DataStructs.TanimotoSimilarity(fps[i],fps[j])
 
-np.save('MFTSK', K_morgan)
-np.save('MACCSTSK', K_maccs)
+np.save('MACCS_TS_matrix', K)
