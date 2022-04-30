@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.4
+# v0.19.3
 
 using Markdown
 using InteractiveUtils
@@ -20,12 +20,22 @@ Random.seed!(97330)
 """
 	kf = stratified_KFolds(ids, k, y=y)
 
-Produces indices for K-folded data with stratification on `y`
+produces indices for K-folded data with stratification on `y`.
+
+##### example
+```
+ids = 1:9
+k = 3
+y = [1, 1, 1, -1, -1, -1, -1, -1, -1]
+stratified_kfolds(ids, k; y=y) # 1, 2, 3 will be in the three different folds always.
+```
 """
 function stratified_kfolds(ids, k; y)
 	@assert length(ids) == length(y)
 
 	# partition data, stratified
+	# to see why this works, look at output of:
+	#    partition(collect(1:9), [1/3, 1/3]..., shuffle=true)
 	kfs = partition(ids, [1 / k for i in 1:k-1]..., shuffle=true, stratify=y)
 
 	# build (train, test) tuples
@@ -121,32 +131,34 @@ begin
 	int_to_class = Dict([i => l for (l, i) in class_to_int])
 end
 
+# ╔═╡ acf0312f-5fac-407c-b308-44497c60bbaa
+md"#### read in kernel matrices and target vector
+computed in:
+* `fingerprint.py`
+* `compute_Gram_matrices.jl`
+"
+
 # ╔═╡ 70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
 begin
-	data_dir = "gram_matrices"
-	
 	kernel = "fixed_length_rw_kernel"
-	kernel_params = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] # l
-	# kernel = "grw_kernel"
-	# kernel_params = [0.06, 0.05, 0.04, 0.03, 0.02, 0.01] # γ
+	kernel_params = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] # L
 
-	kernel_param_name = Dict("fixed_length_rw_kernel" => "walk length, L",
-		                     "grw_kernel" => "γ")
-	kernel_to_pretty_kernel = Dict("fixed_length_rw_kernel" => "fixed length RWGK",
-		"grw_kernel" => "geometric RWGK"
-	)
+	kernel_param_name = Dict("fixed_length_rw_kernel" => "walk length, L")
+	kernel_to_pretty_kernel = Dict("fixed_length_rw_kernel" => "fixed length RWGK")
 end
 
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
 begin
-	K_fp = npzread("MACCSTSK.npy")
+	# similarity matrix from fingerprint.py (baseline)
+	K_fp = npzread("MACCS_TS_matrix.npy")
 
+	# similarity matrices from random walk kernel
 	Ks = []
 	toxicity = []
 	mols = []
 	for p in kernel_params
 		# load data from compute_Gram_matrix.jl
-		jldfilename = joinpath(data_dir, "BeeTox_$(kernel)_$p.jld2")
+		jldfilename = joinpath("gram_matrices", "BeeTox_$(kernel)_$p.jld2")
 		mols = load(jldfilename, "mols")
 		toxicity = Vector(load(jldfilename, "toxicity"))
 		K        = load(jldfilename, "K")
@@ -155,8 +167,49 @@ begin
 	Ks
 end
 
+# ╔═╡ 95b17257-6c55-48f7-b1cc-42cbbce5aa0c
+function compare_similarities(K₁::Matrix{Float64}, K₂::Matrix{Float64},
+	                          kernel₁_name::String, kernel₂_name::String;
+	                          lo::Float64=-Inf, hi::Float64=Inf
+)
+	@assert size(K₁) == size(K₂)
+
+	n = size(K₁)[1]
+	
+	# center both kernel matrices
+	tf₁ = KernelCenterer().fit(K₁)
+	K̃₁ = tf₁.transform(K₁)
+	
+	tf₂ = KernelCenterer().fit(K₂)
+	K̃₂ = tf₂.transform(K₂)
+
+	# get similarity of all pairs in a list for plotting
+	K₁_list = clamp.(
+		[K̃₁[i, j] for i = 1:n for j = (i+1):n], lo, hi)
+	K₂_list = clamp.(
+		[K̃₂[i, j] for i = 1:n for j = (i+1):n], lo, hi)
+	@assert length(K₁_list) == n * (n-1) / 2
+	# clamp
+	clamp.(rand(10), 0.5, 0.6)
+	hist_2d = fit(Histogram, (K₁_list, K₂_list), nbins=(100, 100))
+
+	white = ColorSchemes.RGB(1.0, 1.0, 1.0)
+	cmaps = ColorScheme(vcat(white, ColorSchemes.algae.colors))
+	
+	fig = Figure()
+	ax  = Axis(fig[1, 1], xlabel=kernel₁_name, ylabel=kernel₂_name)
+	hm = heatmap!(hist_2d.edges[1], hist_2d.edges[2], 
+		          hist_2d.weights, colormap=cmaps)
+	# scatter!(K₁_list, K₂_list, strokewidth=1, strokecolor=(:red, 0.05), color=(:white, 0.0))
+	Colorbar(fig[1, 2], hm, label="# pairs of molecules")#, height=400)
+	return fig
+end
+
+# ╔═╡ 4c01515b-b2a2-425f-a258-4e6c0b9ba7e7
+compare_similarities(K_fp, Ks[5], "TS of MACCS FP", "k RWK", hi=5e4)
+
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
-y = map(t -> class_to_int[t], toxicity)
+y = map(t -> class_to_int[t], toxicity) # target vector
 
 # ╔═╡ 9a6ce760-5da6-4c7e-9100-cd6676949bb1
 function viz_class_distn(y)	
@@ -220,7 +273,7 @@ end
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 100
+	n_runs = 1
 	# list of C-params of the SVC to loop over as candidate hyperparams
 	if kernel == "fixed_length_rw_kernel"
 		Cs = 10 .^ range(-5, 1, length=15)
@@ -573,7 +626,7 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.2"
+julia_version = "1.7.1"
 manifest_format = "2.0"
 
 [[deps.AbstractFFTs]]
@@ -1990,8 +2043,11 @@ version = "3.5.0+0"
 # ╠═79295613-923b-42a3-a31f-8ffe68aa8cb0
 # ╠═efd8a5de-82f4-4255-9982-ff866937261f
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
+# ╟─acf0312f-5fac-407c-b308-44497c60bbaa
 # ╠═70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
 # ╠═008f0df9-5cdb-449d-a837-3d808536d30a
+# ╠═95b17257-6c55-48f7-b1cc-42cbbce5aa0c
+# ╠═4c01515b-b2a2-425f-a258-4e6c0b9ba7e7
 # ╠═119ffdca-7f51-4e71-b825-843da6a75413
 # ╠═9a6ce760-5da6-4c7e-9100-cd6676949bb1
 # ╠═e22a6f2b-053c-42e0-9f24-6ecd8b16fcf7
