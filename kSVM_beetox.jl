@@ -254,7 +254,10 @@ function train_svm(K_train::Matrix, y_train::Vector, C::Float64)
 end
 
 # ╔═╡ ad47f719-8959-44d4-aaa0-a21d7f6d93a0
-md"#### cross-validation procedure to determine opt hyperparams"
+md"#### cross-validation procedure to determine opt hyperparams
+* first function for finding optimal (L, C) for random walk kernel
+* second function for finding optimal C for MACCS fingerprint
+"
 
 # ╔═╡ 6b7e4746-2f1b-4d17-850b-403e3b75c453
 # assess performance of different C's and L's via cross-validation (cv)
@@ -314,6 +317,9 @@ function cv_run(K::Matrix{Float64}, y::Vector{Int},
 	return C_opt
 end
 
+# ╔═╡ 5bb3385c-a198-4aab-b0b7-960054a38278
+md"#### do the training and testing!"
+
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
@@ -331,12 +337,15 @@ begin
 	recalls    = zeros(n_runs)
 	f1_scores  = zeros(n_runs)
 	cms = [zeros(2, 2) for _ = 1:n_runs]
+	C_opts = zeros(n_runs)
+	L_opts = zeros(Int, n_runs)
 	
 	accuracies_fp = zeros(n_runs)
 	precisions_fp = zeros(n_runs)
 	recalls_fp    = zeros(n_runs)
 	f1_scores_fp  = zeros(n_runs)
 	cms_fp = [zeros(2, 2) for _ = 1:n_runs]
+	C_opts_fp = zeros(n_runs)
 	
 	for r = 1:n_runs		
 		println("run # =", r, " / ", n_runs)
@@ -353,6 +362,8 @@ begin
 		=#
 		# cross-validation to get optimal L, C
 		L_opt, C_opt = cv_run(Ks, y, kf, Ls, Cs)
+		L_opts[r] = L_opt
+		C_opts[r] = C_opt
 		
 		# train deployment model on all cv data
 		K_train = Ks[L_opt][ids_cv, ids_cv]
@@ -374,6 +385,7 @@ begin
 		=#
 		# cross-validation to get optimal L, C
 		C_opt = cv_run(K_fp, y, kf, Cs_fp)
+		C_opts_fp[r] = C_opt
 
 		# train deployment model on all cv data
 		K_train = K_fp[ids_cv, ids_cv]
@@ -392,74 +404,64 @@ begin
 	end
 end
 
-# ╔═╡ 5cbcd3ef-93ee-4f6c-b25d-b38328b411c6
-begin
-	ids_cv2, ids_test2 = partition(1:length(y), 0.8, stratify=y, shuffle=true)
-	kf2 = stratified_kfolds(ids_cv2, n_folds; y=y[ids_cv2])
-	cv_run(Ks, y, kf2, Ls, Cs)
-end
-
-# ╔═╡ 8a53eae0-fe0d-40c1-b8fe-d73379bf65d7
-C_opt2 = cv_run(K_fp, y, kf2, Cs_fp)
-
-# ╔═╡ af2e6d5c-f5ec-47f7-b473-5e55a8043dd7
-cms2 = [zeros(2, 2) for i = 1:n_runs]
-
-# ╔═╡ 20502638-3cc2-4700-9910-fb5112c3844c
-
+# ╔═╡ 458efa24-2e3d-486a-aee0-31887bc6ac55
+md"#### vis results"
 
 # ╔═╡ aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
-function viz_cv_results(kernel_params, Cs, mean_scores, mean_scores_fp)
-	cmap = ColorSchemes.linear_green_5_95_c69_n256
+function viz_cv_results(L_opts::Vector{Int},
+	                    C_opts::Vector{Float64})
+	cmap = ColorSchemes.amp
 
-	fig = Figure(resolution=(450, 585))
+	# rows = L
+	# cols = C
+	frequency = zeros(Int, length(Ls), length(Cs))
+	for r = 1:n_runs
+		i = findfirst(Ls .== L_opts[r])
+		j = findfirst(Cs .== C_opts[r])
+		frequency[i, j] += 1
+	end
+	@assert sum(frequency) == n_runs
+	
+	fig = Figure(resolution=(400, 500))
 
 	ax = Axis(fig[1, 1], 
-		      xlabel="walk length, L",
-			  ylabel="SVM C parameter",
-		      # aspect=length(kernel_params) / length(Cs),
-			  xticks=(1:length(kernel_params), 
-			          ["$p" for p in kernel_params]),
-			  yticks=(1:length(Cs), 
-			          reverse(["$(round(C, digits=5))" for C in Cs])),
-			  xticklabelrotation=π / 2, #kernel == "grw_kernel" ? π/2 : 0.0
+		      xlabel="SVM C parameter",
+			  ylabel="walk length, L",
+		      aspect=DataAspect(),
+			  xticks=(1:length(Cs), 
+			          ["$(round(C, digits=5))" for C in Cs]),
+			  yticks=(1:length(Ls), 
+			          ["$L" for L in reverse(Ls)]),
+			  
+			  xticklabelrotation=π/2,
+			  title="optimal hyperparams\nin $n_folds-fold cross-validation"
 	)
 
-	hm = heatmap!(ax, 1:length(kernel_params), 1:length(Cs), reverse(mean_scores, dims=1)', colormap=cmap)
+	# to understand the reverse:
+		# function test_hm(A)
+		# 	fig = Figure()
+		# 	ax = Axis(fig[1, 1], 
+		# 		xticks=1:1:size(A)[2],
+		# 		yticks=(1:size(A)[1], ["$x" for x in reverse(1:size(A)[1])])
+		# 	)
+		# 	heatmap!(1:size(A)[2], 1:size(A)[1], reverse(A, dims=1)')
+		# 	fig
+		# end
+	hm = heatmap!(ax, 1:length(Cs), 1:length(Ls), 
+		reverse(frequency, dims=1)', colormap=cmap)
 
 	# plot optimal as star.
-	id_y, id_x = argmax(mean_scores).I # column is x; row is y.
-	scatter!([id_x], [size(mean_scores)[1]- id_y + 1], 
-		marker=:star5, color="black", markersize=15)
+	id_y, id_x = argmax(frequency).I # column is x; row is y.
+	scatter!([id_x], [size(frequency)[1]- id_y + 1], 
+		marker=:star5, color="white", markersize=15)
 
-	Colorbar(fig[2, 1:2], hm, label="validation F1 score",
-		vertical=false, ticks=[0, 0.2, 0.4, 0.6])
-
-	# plot heatmap for MACCS fingerprint
-	ax_fp = Axis(fig[1, 2], xticks=([0], ["MACCS"]),
-				xticklabelrotation=π / 2, 
-				yticks=(1:length(Cs), reverse(["$(round(C, digits=5))" for C in Cs])))
-	linkyaxes!(ax, ax_fp)
-	hm = heatmap!(ax_fp, [0], 1:length(Cs), reshape(reverse(mean_scores_fp), 
-					(1, length(Cs))), colormap=cmap)
-	hideydecorations!(ax_fp, grid=false)
-	
-	colsize!(fig.layout, 2, Auto(0.06))
-
-	# star the optimal C
-	id_y_fp = argmax(mean_scores_fp)
-	scatter!([0], [length(mean_scores_fp) - id_y_fp + 1],
-			marker=:star5, color="black", markersize=15)
-	
-	# add title to the top
-	supertitle = Label(fig[0, :], "hyperparameter exploration\n($n_folds-folds cross-validation)", textsize = 20)
-
-	save("cv_heatmap_$kernel.pdf", fig)
-
-	#heatmap!(x, y, values)
+	Colorbar(fig[1, 2], hm, label="frequency", height=300)#, ticks=[0, 0.2, 0.4, 0.6])
 
 	return fig
 end
+
+# ╔═╡ b1242967-8c91-43c0-9b3d-31973045f946
+viz_cv_results(L_opts, C_opts)
 
 # ╔═╡ 0905cfbe-16d5-4c2c-ba14-98be50d54bda
 viz_cv_results(kernel_params, Cs, mean_scores, mean_scores_fp)
@@ -2097,11 +2099,10 @@ version = "3.5.0+0"
 # ╟─ad47f719-8959-44d4-aaa0-a21d7f6d93a0
 # ╠═6b7e4746-2f1b-4d17-850b-403e3b75c453
 # ╠═ad877543-d4b1-4475-bb51-a97d8bf9155f
-# ╠═5cbcd3ef-93ee-4f6c-b25d-b38328b411c6
-# ╠═8a53eae0-fe0d-40c1-b8fe-d73379bf65d7
+# ╟─5bb3385c-a198-4aab-b0b7-960054a38278
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
-# ╠═af2e6d5c-f5ec-47f7-b473-5e55a8043dd7
-# ╠═20502638-3cc2-4700-9910-fb5112c3844c
+# ╟─458efa24-2e3d-486a-aee0-31887bc6ac55
+# ╠═b1242967-8c91-43c0-9b3d-31973045f946
 # ╠═aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
 # ╠═0905cfbe-16d5-4c2c-ba14-98be50d54bda
 # ╠═efeb6109-8355-4457-996e-e507390505d8
