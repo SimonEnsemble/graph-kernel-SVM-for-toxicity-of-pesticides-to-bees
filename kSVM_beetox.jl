@@ -39,7 +39,7 @@ function stratified_kfolds(ids, k; y)
 	kfs = partition(ids, [1 / k for i in 1:k-1]..., shuffle=true, stratify=y)
 
 	# build (train, test) tuples
-	tups = []
+	tups = Tuple{Vector{Int64}, Vector{Int64}}[]
 	for fold_idx in 1:k
 		ids_test = kfs[fold_idx]
 		ids_train = vcat(kfs[[i for i in 1:k if i ≠ fold_idx]]...)
@@ -133,44 +133,39 @@ end
 
 # ╔═╡ acf0312f-5fac-407c-b308-44497c60bbaa
 md"#### read in kernel matrices and target vector
-computed in:
-* `fingerprint.py`
-* `compute_Gram_matrices.jl`
 "
-
-# ╔═╡ 70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
-begin
-	kernel = "fixed_length_rw_kernel"
-	kernel_params = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] # L
-
-	kernel_param_name = Dict("fixed_length_rw_kernel" => "walk length, L")
-	kernel_to_pretty_kernel = Dict("fixed_length_rw_kernel" => "fixed length RWGK")
-end
 
 # ╔═╡ 008f0df9-5cdb-449d-a837-3d808536d30a
 begin
-	# similarity matrix from fingerprint.py (baseline)
+	#=
+	MACCS fingerprint similarity matrix 
+		from fingerprint.py (baseline)
+	=#
 	K_fp = npzread("MACCS_TS_matrix.npy")
 
-	# similarity matrices from random walk kernel
-	Ks = []
+	#=
+	fixed-length random walk kernel fingerprint
+		from compute_Gram_matrices.jl
+	=#
+	Ls = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] # L
+	Ks = Dict{Int, Matrix{Float64}}()
 	toxicity = []
 	mols = []
-	for p in kernel_params
+	for L in Ls
 		# load data from compute_Gram_matrix.jl
-		jldfilename = joinpath("gram_matrices", "BeeTox_$(kernel)_$p.jld2")
+		jldfilename = joinpath("gram_matrices",
+			"BeeTox_fixed_length_rw_kernel_$L.jld2")
 		mols = load(jldfilename, "mols")
 		toxicity = Vector(load(jldfilename, "toxicity"))
-		K        = load(jldfilename, "K")
+		Ks[L] = load(jldfilename, "K")
 		@info "scaling by size of molecules"
 		for i = 1:length(toxicity)
 			for j = 1:length(toxicity)
 				nᵢ = length(atomsymbol(mols[i]))
-				nⱼ = length(atomsymbol(mols[i]))
-				K[i, j] /= nᵢ * nⱼ
+				nⱼ = length(atomsymbol(mols[j]))
+				Ks[L][i, j] /= nᵢ * nⱼ
 			end
 		end
-		push!(Ks, K)
 	end
 	Ks
 end
@@ -214,7 +209,7 @@ function compare_similarities(K₁::Matrix{Float64}, K₂::Matrix{Float64},
 end
 
 # ╔═╡ 4c01515b-b2a2-425f-a258-4e6c0b9ba7e7
-compare_similarities(K_fp, Ks[5], "TS of MACCS FP", "k RWK")
+compare_similarities(K_fp, Ks[4], "TS of MACCS FP", "k RWK", lo=-100.0, hi=100.0)
 
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
 y = map(t -> class_to_int[t], toxicity) # target vector
@@ -231,12 +226,17 @@ function viz_class_distn(y)
 	barplot!(1:2, [sum(y .== l) for l in unique(y)], 
 		     color=[colors[int_to_class[l]] for l in unique(y)])
 	ylims!(0, nothing)
-	save("class_distn_$kernel.pdf", fig)
+	save("class_distn.pdf", fig)
 	fig
 end
 
 # ╔═╡ e22a6f2b-053c-42e0-9f24-6ecd8b16fcf7
 viz_class_distn(y)
+
+# ╔═╡ d5d6273c-5d6b-41ae-8ee3-cc6b82be7593
+md"
+#### training an SVM
+"
 
 # ╔═╡ 14d49e19-92e2-4127-9224-35d09e852447
 function train_svm(K_train::Matrix, y_train::Vector, C::Float64)
@@ -253,128 +253,160 @@ function train_svm(K_train::Matrix, y_train::Vector, C::Float64)
 	return svc, tf
 end
 
-# ╔═╡ 6b7e4746-2f1b-4d17-850b-403e3b75c453
-# assess performance of different C's via CV
-# score according to precision * recall
-function cv_run(K::Matrix{Float64}, y::Vector{Int},
-	            ids_cv, n_folds::Int, Cs::Vector{Float64})
-	kf = stratified_kfolds(ids_cv, n_folds; y=y[ids_cv])
+# ╔═╡ ad47f719-8959-44d4-aaa0-a21d7f6d93a0
+md"#### cross-validation procedure to determine opt hyperparams"
 
+# ╔═╡ 6b7e4746-2f1b-4d17-850b-403e3b75c453
+# assess performance of different C's and L's via cross-validation (cv)
+#    cv score = f1 score
+function cv_run(Ks::Dict{Int, Matrix{Float64}}, y::Vector{Int},
+	            kf::Vector{Tuple{Vector{Int}, Vector{Int}}}, 
+				Ls::Vector{Int}, Cs::Vector{Float64})
+	# store cross-validation scores here.
+	scores = zeros(length(Ls), length(Cs))
+	
+	for (i, L) in enumerate(Ls)
+		K = Ks[L]
+		for (ids_cv_train, ids_cv_test) in kf
+			K_train = K[ids_cv_train, ids_cv_train]
+			K_test  = K[ids_cv_test,  ids_cv_train]
+			for (j, C) in enumerate(Cs)
+				# train SVM on cv-train data (scales inside)
+				svc, tf = train_svm(K_train, y[ids_cv_train], C)
+	
+				# score SVM on cv-test data
+				K_test_centered = tf.transform(K_test)
+				y_pred = svc.predict(K_test_centered)
+				scores[i, j] += f1_score(y[ids_cv_test], y_pred)
+			end
+		end
+	end
+	# scores /= length(kf)
+	L_opt = Ls[argmax(scores).I[1]]
+	C_opt = Cs[argmax(scores).I[2]]
+	return L_opt, C_opt
+end
+
+# ╔═╡ ad877543-d4b1-4475-bb51-a97d8bf9155f
+# assess performance of different C's via cross-validation (cv)
+#    cv score = f1 score
+function cv_run(K::Matrix{Float64}, y::Vector{Int},
+	            kf::Vector{Tuple{Vector{Int}, Vector{Int}}}, 
+				Cs::Vector{Float64})
+	# store cross-validation scores here.
 	scores = zeros(length(Cs))
+	
 	for (ids_cv_train, ids_cv_test) in kf
 		K_train = K[ids_cv_train, ids_cv_train]
 		K_test  = K[ids_cv_test,  ids_cv_train]
-		for i = 1:length(Cs)
+		for (j, C) in enumerate(Cs)
 			# train SVM on cv-train data (scales inside)
-			svc, tf = train_svm(K_train, y[ids_cv_train], Cs[i])
+			svc, tf = train_svm(K_train, y[ids_cv_train], C)
 
 			# score SVM on cv-test data
 			K_test_centered = tf.transform(K_test)
 			y_pred = svc.predict(K_test_centered)
-			scores[i] += f1_score(y[ids_cv_test], y_pred)
+			scores[j] += f1_score(y[ids_cv_test], y_pred)
 		end
 	end
-	scores /= n_folds
-	return scores
+	# scores /= length(kf)
+	C_opt = Cs[argmax(scores)]
+	return C_opt
 end
 
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 1
+	n_runs = 2
+	
 	# list of C-params of the SVC to loop over as candidate hyperparams
-	Cs = 10 .^ range(-5, 1.5, length=20)
+	Cs = 10 .^ range(-5, 0.0, length=10)
+	Cs_fp = 10 .^ range(-4, 1.0, length=10)
 	# Cs = 10 .^ range(-1, 3, length=15) for grwk
-
-	# store cross-validation scores
-	mean_scores    = zeros(length(Cs), length(kernel_params))
-	mean_scores_fp = zeros(length(Cs))
 	
 	# store test set performance metrics
 	@assert class_to_int["Toxic"] == 1 # for toxic = "positive"
-	accuracies  = zeros(length(kernel_params), n_runs)
-	precisions  = zeros(length(kernel_params), n_runs)
-	recalls     = zeros(length(kernel_params), n_runs)
-	f1_scores   = zeros(length(kernel_params), n_runs)
-	accuracies_fp  = zeros(n_runs)
-	precisions_fp  = zeros(n_runs)
-	recalls_fp     = zeros(n_runs)
-	f1_scores_fp   = zeros(n_runs)
+	accuracies = zeros(n_runs)
+	precisions = zeros(n_runs)
+	recalls    = zeros(n_runs)
+	f1_scores  = zeros(n_runs)
+	cms = [zeros(2, 2) for _ = 1:n_runs]
 	
-	# confusion matrices for each kernel param.
-	cms = [zeros(2, 2) for _ = 1:length(kernel_params)]
+	accuracies_fp = zeros(n_runs)
+	precisions_fp = zeros(n_runs)
+	recalls_fp    = zeros(n_runs)
+	f1_scores_fp  = zeros(n_runs)
+	cms_fp = [zeros(2, 2) for _ = 1:n_runs]
 	
 	for r = 1:n_runs		
 		println("run # =", r, " / ", n_runs)
-		# cv/test split. stratified by label.
+		#=
+		all data => 80% cv, 20% test. cv = cross-validation.
+		then cv data = > K-folds partition.
+		all splits stratified by label.
+		=#
 		ids_cv, ids_test = partition(1:length(y), 0.8, stratify=y, shuffle=true)
+		kf = stratified_kfolds(ids_cv, n_folds; y=y[ids_cv])
 		
 		#= 
 		random walk kernel representation
 		=#
-		# loop over kernel params
-		for i = 1:length(kernel_params)
-			# kernel matrix using this kernel param
-			K = Ks[i]
-
-			#=
-			cross-validation to get optimal svc hyper-param C
-			=#
-			scores = cv_run(K, y, ids_cv, n_folds, Cs)
-			# store scores
-			mean_scores[:, i] += scores
-
-			# get optimal hyper-param C for this run
-			C_opt = Cs[argmax(scores)]
-
-			#=
-			train on all CV data, evaluate deployment SVM on test data
-			=#
-			K_train = K[ids_cv, ids_cv]
-			svc, tf = train_svm(K_train, y[ids_cv], C_opt)
-
-			# score deployment svm on test data
-			K_test  = K[ids_test, ids_cv]
-			K_test_centered = tf.transform(K_test)
-			y_pred = svc.predict(K_test_centered)
-			
-			# store performance metrics
-			accuracies[i, r] =  accuracy_score(y[ids_test], y_pred)
-			precisions[i, r] = precision_score(y[ids_test], y_pred)
-			recalls[i, r]    =    recall_score(y[ids_test], y_pred)
-			f1_scores[i, r]  =        f1_score(y[ids_test], y_pred)
-			cms[i] +=         confusion_matrix(y[ids_test], y_pred)
-		end
+		# cross-validation to get optimal L, C
+		L_opt, C_opt = cv_run(Ks, y, kf, Ls, Cs)
 		
+		# train deployment model on all cv data
+		K_train = Ks[L_opt][ids_cv, ids_cv]
+		svc, tf = train_svm(K_train, y[ids_cv], C_opt)
+		
+		# score deployment svm on test data; store results
+		K_test  = Ks[L_opt][ids_test, ids_cv]
+		K_test_centered = tf.transform(K_test)
+		y_pred = svc.predict(K_test_centered)
+		
+		accuracies[r] =   accuracy_score(y[ids_test], y_pred)
+		precisions[r] =  precision_score(y[ids_test], y_pred)
+		recalls[r]    =     recall_score(y[ids_test], y_pred)
+		f1_scores[r]  =         f1_score(y[ids_test], y_pred)
+		cms[r]        = confusion_matrix(y[ids_test], y_pred)
+
 		#= 
 		fingerprint representation
 		=#
-		# cross-validation to find optimal C
-		scores_fp = cv_run(K_fp, y, ids_cv, n_folds, Cs)
-		
-		mean_scores_fp .+= scores_fp
-		
-		C_opt_fp = Cs[argmax(scores_fp)]
+		# cross-validation to get optimal L, C
+		C_opt = cv_run(K_fp, y, kf, Cs_fp)
 
-		# train with optimal C on all cv data
-		K_train_fp = K_fp[ids_cv, ids_cv]
-		svc_fp, tf_fp = train_svm(K_train_fp, y[ids_cv], C_opt_fp)
-
-		# score deployment svm on test data
-		K_test_fp  = K_fp[ids_test, ids_cv]
-		K_test_centered_fp = tf_fp.transform(K_test_fp)
-		y_pred_fp = svc_fp.predict(K_test_centered_fp)
+		# train deployment model on all cv data
+		K_train = K_fp[ids_cv, ids_cv]
+		svc, tf = train_svm(K_train, y[ids_cv], C_opt)
 		
-		# store performance metrics
-		accuracies_fp[r] =  accuracy_score(y[ids_test], y_pred_fp)
-		precisions_fp[r] = precision_score(y[ids_test], y_pred_fp)
-		recalls_fp[r]    =    recall_score(y[ids_test], y_pred_fp)
-		f1_scores_fp[r]  =        f1_score(y[ids_test], y_pred_fp)
+		# score deployment svm on test data; store results
+		K_test  = K_fp[ids_test, ids_cv]
+		K_test_centered = tf.transform(K_test)
+		y_pred_fp = svc.predict(K_test_centered)
+		
+		accuracies_fp[r] =   accuracy_score(y[ids_test], y_pred_fp)
+		precisions_fp[r] =  precision_score(y[ids_test], y_pred_fp)
+		recalls_fp[r]    =     recall_score(y[ids_test], y_pred_fp)
+		f1_scores_fp[r]  =         f1_score(y[ids_test], y_pred_fp)
+		cms_fp[r]        = confusion_matrix(y[ids_test], y_pred_fp)
 	end
-	cms /= n_runs
-	mean_scores /= n_runs
-	mean_scores_fp /= n_runs
 end
+
+# ╔═╡ 5cbcd3ef-93ee-4f6c-b25d-b38328b411c6
+begin
+	ids_cv2, ids_test2 = partition(1:length(y), 0.8, stratify=y, shuffle=true)
+	kf2 = stratified_kfolds(ids_cv2, n_folds; y=y[ids_cv2])
+	cv_run(Ks, y, kf2, Ls, Cs)
+end
+
+# ╔═╡ 8a53eae0-fe0d-40c1-b8fe-d73379bf65d7
+C_opt2 = cv_run(K_fp, y, kf2, Cs_fp)
+
+# ╔═╡ af2e6d5c-f5ec-47f7-b473-5e55a8043dd7
+cms2 = [zeros(2, 2) for i = 1:n_runs]
+
+# ╔═╡ 20502638-3cc2-4700-9910-fb5112c3844c
+
 
 # ╔═╡ aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
 function viz_cv_results(kernel_params, Cs, mean_scores, mean_scores_fp)
@@ -383,7 +415,7 @@ function viz_cv_results(kernel_params, Cs, mean_scores, mean_scores_fp)
 	fig = Figure(resolution=(450, 585))
 
 	ax = Axis(fig[1, 1], 
-		      xlabel=kernel_param_name[kernel],
+		      xlabel="walk length, L",
 			  ylabel="SVM C parameter",
 		      # aspect=length(kernel_params) / length(Cs),
 			  xticks=(1:length(kernel_params), 
@@ -477,7 +509,7 @@ function viz_perf_over_kernel_params(three_panel::Bool)
 
 	fig = Figure()
 	ax  = Axis(fig[1, 1], 
-		xlabel=kernel_param_name[kernel],
+		xlabel="walk length, L",
 		ylabel="performance metric",
 		xticks=kernel_params,
 		yticks=0.5:0.1:1.0,
@@ -2054,16 +2086,22 @@ version = "3.5.0+0"
 # ╠═efd8a5de-82f4-4255-9982-ff866937261f
 # ╠═0bc905f0-8c80-424f-8c87-d17fa4b0f3a5
 # ╟─acf0312f-5fac-407c-b308-44497c60bbaa
-# ╠═70bbe5cf-d740-4c1d-bccf-a0fabc8a8a8f
 # ╠═008f0df9-5cdb-449d-a837-3d808536d30a
 # ╠═95b17257-6c55-48f7-b1cc-42cbbce5aa0c
 # ╠═4c01515b-b2a2-425f-a258-4e6c0b9ba7e7
 # ╠═119ffdca-7f51-4e71-b825-843da6a75413
 # ╠═9a6ce760-5da6-4c7e-9100-cd6676949bb1
 # ╠═e22a6f2b-053c-42e0-9f24-6ecd8b16fcf7
+# ╟─d5d6273c-5d6b-41ae-8ee3-cc6b82be7593
 # ╠═14d49e19-92e2-4127-9224-35d09e852447
+# ╟─ad47f719-8959-44d4-aaa0-a21d7f6d93a0
 # ╠═6b7e4746-2f1b-4d17-850b-403e3b75c453
+# ╠═ad877543-d4b1-4475-bb51-a97d8bf9155f
+# ╠═5cbcd3ef-93ee-4f6c-b25d-b38328b411c6
+# ╠═8a53eae0-fe0d-40c1-b8fe-d73379bf65d7
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
+# ╠═af2e6d5c-f5ec-47f7-b473-5e55a8043dd7
+# ╠═20502638-3cc2-4700-9910-fb5112c3844c
 # ╠═aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
 # ╠═0905cfbe-16d5-4c2c-ba14-98be50d54bda
 # ╠═efeb6109-8355-4457-996e-e507390505d8
