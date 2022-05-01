@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 985381fb-0f41-446a-869d-2ad8736b9403
-using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI, StatsBase,MolecularGraph, Colors, Random, NPZ
+using JLD2, LinearAlgebra, CairoMakie, CSV, DataFrames, ColorSchemes, ScikitLearn, PlutoUI, StatsBase,MolecularGraph, Colors, Random, NPZ, Printf
 
 # ╔═╡ a11eb8ac-8224-11ec-0f0d-efa6aa44a2c7
 md"# k-SVM on beetox data"
@@ -323,11 +323,11 @@ md"#### do the training and testing!"
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 2
+	n_runs = 10
 	
 	# list of C-params of the SVC to loop over as candidate hyperparams
 	Cs = 10 .^ range(-5, 0.0, length=10)
-	Cs_fp = 10 .^ range(-4, 1.0, length=10)
+	Cs_fp = 10 .^ range(-2, 1.0, length=10)
 	# Cs = 10 .^ range(-1, 3, length=15) for grwk
 	
 	# store test set performance metrics
@@ -434,7 +434,7 @@ function viz_cv_results(L_opts::Vector{Int},
 			          ["$L" for L in reverse(Ls)]),
 			  
 			  xticklabelrotation=π/2,
-			  title="optimal hyperparams\nin $n_folds-fold cross-validation"
+			  title="optimal hyperparams\nin $n_folds-fold cross-validation\nL-RWGK"
 	)
 
 	# to understand the reverse:
@@ -455,7 +455,7 @@ function viz_cv_results(L_opts::Vector{Int},
 	scatter!([id_x], [size(frequency)[1]- id_y + 1], 
 		marker=:star5, color="white", markersize=15)
 
-	Colorbar(fig[1, 2], hm, label="frequency", height=300)#, ticks=[0, 0.2, 0.4, 0.6])
+	Colorbar(fig[2, 1], hm, label="frequency", vertical=false)#, ticks=[0, 0.2, 0.4, 0.6])
 
 	return fig
 end
@@ -463,145 +463,110 @@ end
 # ╔═╡ b1242967-8c91-43c0-9b3d-31973045f946
 viz_cv_results(L_opts, C_opts)
 
-# ╔═╡ 0905cfbe-16d5-4c2c-ba14-98be50d54bda
-viz_cv_results(kernel_params, Cs, mean_scores, mean_scores_fp)
+# ╔═╡ fd7bd14a-efdd-46ac-aaf2-7908a1168da4
+function viz_cv_results_fp(C_opts_fp::Vector{Float64})
+	cmap = ColorSchemes.algae
 
-# ╔═╡ efeb6109-8355-4457-996e-e507390505d8
-function viz_perf_over_kernel_params(three_panel::Bool)
-	function wut_to_plot(X; std_err=false)
-		μ = mean(X, dims=2)[:]
-		σ = std(X, dims=2)[:]
-		ebars = σ 
-		if std_err
-			ebars /= sqrt(n_runs)
-		end
-		return μ, ebars
+	# rows = L
+	# cols = C
+	frequency = zeros(Int, 1, length(Cs_fp))
+	for r = 1:n_runs
+		j = findfirst(Cs_fp .== C_opts_fp[r])
+		frequency[1, j] += 1
 	end
-
-	function viz_bands(ax, X, i; std_err=false)
-		μ, ebars = wut_to_plot(X, std_err=std_err)
-		band!(ax, kernel_params, μ .- ebars, μ .+ ebars, 
-				color=(my_colors[i], 0.1))
-	end
+	@assert sum(frequency) == n_runs
 	
-	function viz_metric(ax, X, label, i, marker; std_err=false, viz_ebars=false)
-		μ, ebars = wut_to_plot(X, std_err=std_err)
-		if viz_ebars
-			errorbars!(ax, kernel_params, μ, ebars, color="lightgray")
-		end
-		scatter!(ax, kernel_params, μ, label=label, 
-			color=my_colors[i], markersize=16, marker=marker)
-		lines!(ax, kernel_params, μ, color=my_colors[i])
-	end
+	fig = Figure(resolution=(400, 500))
 
-	function viz_metric_fp(ax, x, label, i, marker; std_err=false, viz_ebars=false)
-		# compute mean, std of metric over the runs
-		μ = mean(x)
-		σ = std(x)
-		ebars = σ 
-		if std_err
-			ebars /= sqrt(n_runs)
-		end
-		# plot point
-		scatter!(ax, [i], [μ], label=label, 
-			color=my_colors[i], markersize=16, marker=marker)
-		errorbars!(ax, [i], [μ], [ebars], color=(my_colors[i], 0.5))
-	end
-
-
-	fig = Figure()
-	ax  = Axis(fig[1, 1], 
-		xlabel="walk length, L",
-		ylabel="performance metric",
-		xticks=kernel_params,
-		yticks=0.5:0.1:1.0,
-		title="classifier performance on test set"
+	ax = Axis(fig[1, 1], 
+		      xlabel="SVM C parameter",
+			  ylabel="",
+		      aspect=DataAspect(),
+			  xticks=(1:length(Cs_fp), 
+			          ["$(round(C, digits=5))" for C in Cs_fp]),
+			  yticks=(1:1, 
+			          [""]),
+			  xticklabelrotation=π/2,
+			  title="optimal hyperparams\nin $n_folds-fold cross-validation\nMACCS fingerprint"
 	)
-	
-	ax_fp = Axis(fig[1, 2], xlabel="MACCS\nfingerprint", xticks=[0])
-	colsize!(fig.layout, 1, Auto(5))
-	hideydecorations!(ax_fp, grid=false)
-	xlims!(ax_fp, 0.8, 3.2)
 
-	linkyaxes!(ax, ax_fp)
-	
-	opt_L = kernel_params[argmax(mean_scores).I[2]]
-	vl_p = vlines!(ax, [opt_L], linewidth=1, color=:gray, linestyle=:dash)
-	
-	viz_bands(ax, accuracies, 1)
-	viz_bands(ax, precisions, 2)
-	viz_bands(ax, recalls, 3)
-	viz_bands(ax, f1_scores, 4)
-	
-	viz_metric(ax, accuracies, "accuracy", 1, :circle)
-	viz_metric(ax, precisions, "precision", 2, :rect)
-	viz_metric(ax, recalls, "recall", 3, :diamond)
-	# viz_metric(ax, f1_scores, "F1 score", 4, :star4)
+	# to understand the reverse:
+		# function test_hm(A)
+		# 	fig = Figure()
+		# 	ax = Axis(fig[1, 1], 
+		# 		xticks=1:1:size(A)[2],
+		# 		yticks=(1:size(A)[1], ["$x" for x in reverse(1:size(A)[1])])
+		# 	)
+		# 	heatmap!(1:size(A)[2], 1:size(A)[1], reverse(A, dims=1)')
+		# 	fig
+		# end
+	hm = heatmap!(ax, 1:length(Cs), 1:1, 
+		reverse(frequency, dims=1)', colormap=cmap)
 
-	viz_metric_fp(ax_fp, accuracies_fp, "accuracy", 1, :circle)
-	viz_metric_fp(ax_fp, precisions_fp, "precision", 2, :rect)
-	viz_metric_fp(ax_fp, recalls_fp, "recall", 3, :diamond)
-	
-	ylims!(ax, 0.45, 1.001)
-	xlims!(ax, -0.2, 12.2)
-	axislegend(ax, orientation=:horizontal)
-	axislegend(ax, [vl_p], ["Lₒₚₜ"], nothing, 
-		position = :rb, orientation = :horizontal)
-	save("performance_$kernel.pdf", fig)
-	fig
+	# plot optimal as star.
+	id_y, id_x = argmax(frequency).I # column is x; row is y.
+	scatter!([id_x], [size(frequency)[1]- id_y + 1], 
+		marker=:star5, color="white", markersize=15)
+
+	Colorbar(fig[2, 1], hm, label="frequency", vertical=false)#, ticks=[0, 0.2, 0.4, 0.6])
+
+	return fig
 end
 
-# ╔═╡ 3e1b3800-364d-445a-9417-a0ad103879d0
-viz_perf_over_kernel_params(false)
+# ╔═╡ 2c2bbf51-61d2-4b0f-b1b2-1a20fd0a3a40
+viz_cv_results_fp(C_opts_fp)
 
-# ╔═╡ ef3dabd3-ac07-4796-a765-97a3bf465254
-md"optimum model... select based on cross-validation procedure."
+# ╔═╡ 2133e986-3916-493d-a6df-70f362a4b4fc
+mean(precisions)
 
-# ╔═╡ b1176500-a574-4269-8862-a8fbf02edb2a
-opt_kernel_param_id = argmax(mean_scores).I[2]
+# ╔═╡ 947c6521-bccc-4d57-b2bf-b686fda2f3b4
+mean(precisions_fp)
 
-# ╔═╡ e7fbc5a6-d88a-469c-9bb9-aafe48ed7700
-L_opt = kernel_params[opt_kernel_param_id] # optimal L
+# ╔═╡ efeb6109-8355-4457-996e-e507390505d8
+function viz_test_perf()
+	perf = [mean(f1_scores), mean(precisions), 
+		mean(recalls), mean(accuracies)]
+	perf_fp = [mean(f1_scores_fp), mean(precisions_fp), 
+		mean(recalls_fp), mean(accuracies_fp)]
+	
+	σ = [std(f1_scores), std(precisions), 
+		std(recalls), std(accuracies)]
+	σ_fp = [std(f1_scores_fp), std(precisions_fp), 
+		std(recalls_fp), std(accuracies_fp)]
+	
+	fig = Figure()
+	ax = Axis(fig[1, 1], 
+		      xticks=(1:4, ["F1 score", "precision", "recall", "accuracy"]),
+		      yticks=0:0.2:1.0
+	)
 
-# ╔═╡ f257f830-45a0-4ad2-bb3f-b675a687182e
-C_opt = Cs[argmax(mean_scores).I[1]]
+	colors = ColorSchemes.tableau_colorblind[1:2]
 
-# ╔═╡ 12eef69e-7eae-4639-805a-ea00ed71eb03
-md"opt accuracy, precision, recall on test data"
+	barplot!(vcat(1:4, 1:4),
+		     vcat(perf, perf_fp),
+             dodge=vcat([1 for i = 1:4], [2 for i = 1:4]),
+             color=vcat([colors[1] for i = 1:4], [colors[2] for i = 1:4]),
+			 label_size=12,
+		     label_formatter=x -> @sprintf("%.2f", x),
+			 bar_labels=:y, label_offset=-100, color_over_background=:white
+    )
+	errorbars!(collect(1:4) .- 1/5, perf, σ)
+	errorbars!(collect(1:4) .+ 1/5, perf_fp, σ_fp)
 
-# ╔═╡ f206780b-37a7-42d9-8aca-db53aad206ef
-acc_test = mean(accuracies[opt_kernel_param_id, :])
+	Legend(fig[1, 2], 
+		[PolyElement(polycolor=colors[i]) for i in 1:2], 
+		["L-RWGK", "MACCS FP"]
+	)
+	
+	ylims!(0, 1)
+	return fig
+end
 
-# ╔═╡ 3e36201e-67a9-4d9f-9304-28c27f8b21e7
-pre_test = mean(precisions[opt_kernel_param_id, :])
-
-# ╔═╡ 8699be2e-65aa-4817-ab17-1ec6cd742ed0
-rec_test = mean(recalls[opt_kernel_param_id, :])
-
-# ╔═╡ 87c68781-21f2-4dfd-ad17-35e69fd24853
-f1_test = mean(f1_scores[opt_kernel_param_id, :])
-
-# ╔═╡ d31e46e0-efed-48df-981d-a7318a9c58e1
-acc_test_fp, pre_test_fp, rec_test_fp, f1_test_fp = mean(accuracies_fp), mean(precisions_fp), mean(recalls_fp), mean(f1_scores_fp)
-
-# ╔═╡ 11532634-1a3e-4286-8d1c-4d8b0043300a
-md"snippets of text"
-
-# ╔═╡ 34c7e5e2-2f86-434d-b782-ee607d0d284c
-md"The optimal classifier, with walk length $(kernel_params[opt_kernel_param_id]), achieves a (mean over $n_runs runs) accuracy, precision, recall, and F1 score of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), $(round(rec_test,digits=2)), and $(round(f1_test,digits=2)) on the test data set." # abstract
-
-# ╔═╡ cb6b4422-bf1e-4363-8dc1-8129b56c3357
-md"Our classifier achieves a test-set accuracy, precision, recall, and F1 score of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), $(round(rec_test,digits=2)), and $(round(f1_test,digits=2))."
-
-# ╔═╡ af58bfc4-4b68-43ef-95ca-dab5943b60c8
-md"The optimal classifier, chosen by the mean F1 score in the cross-validation procedure, used the $L_opt-RWGK and achieved a mean accuracy, precision, recall, and F1 score of $(round(acc_test,digits=2)), $(round(pre_test,digits=2)), $(round(rec_test,digits=2)), and $(round(f1_test,digits=2)) on the test data set.
-"
-
-# ╔═╡ 5617c798-98eb-4547-afaf-70227cf58056
-cm_opt = cms[opt_kernel_param_id]
+# ╔═╡ 819d71a2-e831-4c82-a3df-6622f953733e
+viz_test_perf()
 
 # ╔═╡ 8d2dd082-b587-4bcc-9b5a-cf38375927ba
-function viz_confusion_matrix(cm::Matrix, class_list::Vector{String})
+function viz_confusion_matrix(cm::Matrix, class_list::Vector{String}, rep::String)
 	# cm[i, j] is equal to the number of observations known to be in group i and predicted to be in group j.
 	cm_plot = reverse(cm, dims=1)'
 	
@@ -611,7 +576,7 @@ function viz_confusion_matrix(cm::Matrix, class_list::Vector{String})
               yticks=([1, 2], reverse(class_list)),
               ylabel="truth",
               xlabel="prediction",
-		      title="⟨confusion matrix⟩ on test set, L=$(opt_kernel_param_id-1)"
+		      title="⟨confusion matrix⟩ on test set\n$rep"
     )
     hm = heatmap!(cm_plot, colormap=ColorSchemes.algae, colorrange=(0, maximum(cm)))
     for i = 1:2
@@ -623,15 +588,15 @@ function viz_confusion_matrix(cm::Matrix, class_list::Vector{String})
         end
     end
     Colorbar(fig[1, 2], hm, label="⟨# molecules⟩")
-	save("cm_$kernel.pdf", fig)
+	save("cm.pdf", fig)
     fig
 end
 
 # ╔═╡ 4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
-viz_confusion_matrix(cm_opt, [int_to_class[-1], int_to_class[1]])
+viz_confusion_matrix(mean(cms), [int_to_class[-1], int_to_class[1]], "L-RWGK")
 
-# ╔═╡ 09f68565-e645-4ef9-bdb9-09537418d503
-n_runs
+# ╔═╡ 1f74e9b1-f799-47d3-bd09-327812c2ca2d
+viz_confusion_matrix(mean(cms_fp), [int_to_class[-1], int_to_class[1]], "MACCS FP")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -647,6 +612,7 @@ MLJBase = "a7f614a8-145f-11e9-1d2a-a57a1082229d"
 MolecularGraph = "6c89ec66-9cd8-5372-9f91-fabc50dd27fd"
 NPZ = "15e1cf62-19b3-5cfa-8e77-841668bca605"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 ScikitLearn = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
@@ -2103,27 +2069,15 @@ version = "3.5.0+0"
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
 # ╟─458efa24-2e3d-486a-aee0-31887bc6ac55
 # ╠═b1242967-8c91-43c0-9b3d-31973045f946
+# ╠═2c2bbf51-61d2-4b0f-b1b2-1a20fd0a3a40
 # ╠═aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
-# ╠═0905cfbe-16d5-4c2c-ba14-98be50d54bda
+# ╠═fd7bd14a-efdd-46ac-aaf2-7908a1168da4
+# ╠═2133e986-3916-493d-a6df-70f362a4b4fc
+# ╠═947c6521-bccc-4d57-b2bf-b686fda2f3b4
 # ╠═efeb6109-8355-4457-996e-e507390505d8
-# ╠═3e1b3800-364d-445a-9417-a0ad103879d0
-# ╟─ef3dabd3-ac07-4796-a765-97a3bf465254
-# ╠═b1176500-a574-4269-8862-a8fbf02edb2a
-# ╠═e7fbc5a6-d88a-469c-9bb9-aafe48ed7700
-# ╠═f257f830-45a0-4ad2-bb3f-b675a687182e
-# ╟─12eef69e-7eae-4639-805a-ea00ed71eb03
-# ╠═f206780b-37a7-42d9-8aca-db53aad206ef
-# ╠═3e36201e-67a9-4d9f-9304-28c27f8b21e7
-# ╠═8699be2e-65aa-4817-ab17-1ec6cd742ed0
-# ╠═87c68781-21f2-4dfd-ad17-35e69fd24853
-# ╠═d31e46e0-efed-48df-981d-a7318a9c58e1
-# ╟─11532634-1a3e-4286-8d1c-4d8b0043300a
-# ╠═34c7e5e2-2f86-434d-b782-ee607d0d284c
-# ╠═cb6b4422-bf1e-4363-8dc1-8129b56c3357
-# ╟─af58bfc4-4b68-43ef-95ca-dab5943b60c8
-# ╠═5617c798-98eb-4547-afaf-70227cf58056
+# ╠═819d71a2-e831-4c82-a3df-6622f953733e
 # ╠═8d2dd082-b587-4bcc-9b5a-cf38375927ba
 # ╠═4c5ebf0d-9b2d-4e38-b517-78d25d5d3b33
-# ╠═09f68565-e645-4ef9-bdb9-09537418d503
+# ╠═1f74e9b1-f799-47d3-bd09-327812c2ca2d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
