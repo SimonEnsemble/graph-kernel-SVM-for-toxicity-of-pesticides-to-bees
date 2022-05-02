@@ -147,7 +147,7 @@ begin
 	fixed-length random walk kernel fingerprint
 		from compute_Gram_matrices.jl
 	=#
-	Ls = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] # L
+	Ls = [i for i = 0:12] # L
 	Ks = Dict{Int, Matrix{Float64}}()
 	toxicity = []
 	mols = []
@@ -259,6 +259,36 @@ md"#### cross-validation procedure to determine opt hyperparams
 * second function for finding optimal C for MACCS fingerprint
 "
 
+# ╔═╡ 565bdea4-5c19-4560-baca-c226943758e3
+struct Scores
+	acc::Float64
+	pre::Float64
+	rec::Float64
+	f1::Float64
+	cm::Matrix{Float64}
+end
+
+# ╔═╡ 16f9a52d-af40-4f5d-8746-2870b99aa347
+function train_and_score_svm(K_train::Matrix{Float64}, y_train::Vector{Int}, 
+	                          K_test::Matrix{Float64}, y_test::Vector{Int}, 
+							 C::Float64)
+	# train SVM on train data (scales inside)
+	svc, tf = train_svm(K_train, y_train, C)
+
+	# score SVM on test data
+	K_test_centered = tf.transform(K_test)
+	y_pred = svc.predict(K_test_centered)
+
+	# compute scores on test data
+	return Scores(
+		  accuracy_score(y_test, y_pred),
+		 length(unique(y_pred)) == 2 ? precision_score(y_test, y_pred) : 0.0,
+		    recall_score(y_test, y_pred),
+		        f1_score(y_test, y_pred),
+		confusion_matrix(y_test, y_pred)
+	)
+end
+
 # ╔═╡ 6b7e4746-2f1b-4d17-850b-403e3b75c453
 # assess performance of different C's and L's via cross-validation (cv)
 #    cv score = f1 score
@@ -274,13 +304,8 @@ function cv_run(Ks::Dict{Int, Matrix{Float64}}, y::Vector{Int},
 			K_train = K[ids_cv_train, ids_cv_train]
 			K_test  = K[ids_cv_test,  ids_cv_train]
 			for (j, C) in enumerate(Cs)
-				# train SVM on cv-train data (scales inside)
-				svc, tf = train_svm(K_train, y[ids_cv_train], C)
-	
-				# score SVM on cv-test data
-				K_test_centered = tf.transform(K_test)
-				y_pred = svc.predict(K_test_centered)
-				scores[i, j] += f1_score(y[ids_cv_test], y_pred)
+				scores[i, j] = train_and_score_svm(K_train, y[ids_cv_train],
+					                               K_test,  y[ids_cv_test], C).f1
 			end
 		end
 	end
@@ -303,13 +328,8 @@ function cv_run(K::Matrix{Float64}, y::Vector{Int},
 		K_train = K[ids_cv_train, ids_cv_train]
 		K_test  = K[ids_cv_test,  ids_cv_train]
 		for (j, C) in enumerate(Cs)
-			# train SVM on cv-train data (scales inside)
-			svc, tf = train_svm(K_train, y[ids_cv_train], C)
-
-			# score SVM on cv-test data
-			K_test_centered = tf.transform(K_test)
-			y_pred = svc.predict(K_test_centered)
-			scores[j] += f1_score(y[ids_cv_test], y_pred)
+			scores[j] = train_and_score_svm(K_train, y[ids_cv_train],
+					                        K_test,  y[ids_cv_test], C).f1
 		end
 	end
 	# scores /= length(kf)
@@ -323,11 +343,11 @@ md"#### do the training and testing!"
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 10
+	n_runs = 2
 	
 	# list of C-params of the SVC to loop over as candidate hyperparams
-	Cs = 10 .^ range(-5, 0.0, length=10)
-	Cs_fp = 10 .^ range(-2, 1.0, length=10)
+	Cs = 10 .^ range(-5, 0.0, length=15)
+	Cs_fp = 10 .^ range(-1, 1.0, length=15)
 	# Cs = 10 .^ range(-1, 3, length=15) for grwk
 	
 	# store test set performance metrics
@@ -365,42 +385,34 @@ begin
 		L_opts[r] = L_opt
 		C_opts[r] = C_opt
 		
-		# train deployment model on all cv data
-		K_train = Ks[L_opt][ids_cv, ids_cv]
-		svc, tf = train_svm(K_train, y[ids_cv], C_opt)
+		# train, score deployment model (with C_opt, L_opt) on all cv data
+		scores = train_and_score_svm(Ks[L_opt][ids_cv,   ids_cv], y[ids_cv],
+			                         Ks[L_opt][ids_test, ids_cv], y[ids_test], 
+			                         C_opt)
 		
-		# score deployment svm on test data; store results
-		K_test  = Ks[L_opt][ids_test, ids_cv]
-		K_test_centered = tf.transform(K_test)
-		y_pred = svc.predict(K_test_centered)
-		
-		accuracies[r] =   accuracy_score(y[ids_test], y_pred)
-		precisions[r] =  precision_score(y[ids_test], y_pred)
-		recalls[r]    =     recall_score(y[ids_test], y_pred)
-		f1_scores[r]  =         f1_score(y[ids_test], y_pred)
-		cms[r]        = confusion_matrix(y[ids_test], y_pred)
+		accuracies[r] = scores.acc
+		precisions[r] = scores.pre
+		recalls[r]    = scores.rec
+		f1_scores[r]  = scores.f1
+		cms[r]        = scores.cm
 
 		#= 
 		fingerprint representation
 		=#
 		# cross-validation to get optimal L, C
-		C_opt = cv_run(K_fp, y, kf, Cs_fp)
-		C_opts_fp[r] = C_opt
+		C_opt_fp = cv_run(K_fp, y, kf, Cs_fp)
+		C_opts_fp[r] = C_opt_fp
 
-		# train deployment model on all cv data
-		K_train = K_fp[ids_cv, ids_cv]
-		svc, tf = train_svm(K_train, y[ids_cv], C_opt)
+		# train deployment model (with C=C_opt) on all cv data
+		scores_fp = train_and_score_svm(K_fp[ids_cv,   ids_cv], y[ids_cv],
+			                            K_fp[ids_test, ids_cv], y[ids_test], 
+			                            C_opt_fp)
 		
-		# score deployment svm on test data; store results
-		K_test  = K_fp[ids_test, ids_cv]
-		K_test_centered = tf.transform(K_test)
-		y_pred_fp = svc.predict(K_test_centered)
-		
-		accuracies_fp[r] =   accuracy_score(y[ids_test], y_pred_fp)
-		precisions_fp[r] =  precision_score(y[ids_test], y_pred_fp)
-		recalls_fp[r]    =     recall_score(y[ids_test], y_pred_fp)
-		f1_scores_fp[r]  =         f1_score(y[ids_test], y_pred_fp)
-		cms_fp[r]        = confusion_matrix(y[ids_test], y_pred_fp)
+		accuracies_fp[r] = scores_fp.acc
+		precisions_fp[r] = scores_fp.pre
+		recalls_fp[r]    = scores_fp.rec
+		f1_scores_fp[r]  = scores_fp.f1
+		cms_fp[r]        = scores_fp.cm
 	end
 end
 
@@ -2063,6 +2075,8 @@ version = "3.5.0+0"
 # ╟─d5d6273c-5d6b-41ae-8ee3-cc6b82be7593
 # ╠═14d49e19-92e2-4127-9224-35d09e852447
 # ╟─ad47f719-8959-44d4-aaa0-a21d7f6d93a0
+# ╠═565bdea4-5c19-4560-baca-c226943758e3
+# ╠═16f9a52d-af40-4f5d-8746-2870b99aa347
 # ╠═6b7e4746-2f1b-4d17-850b-403e3b75c453
 # ╠═ad877543-d4b1-4475-bb51-a97d8bf9155f
 # ╟─5bb3385c-a198-4aab-b0b7-960054a38278
