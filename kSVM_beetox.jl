@@ -523,8 +523,10 @@ function viz_cv_results_fp(C_opts_fp::Vector{Float64})
 	scatter!([id_x], [size(frequency)[1]- id_y + 1], 
 		marker=:star5, color="white", markersize=15)
 
-	Colorbar(fig[2, 1], hm, label="frequency", vertical=false,
+	cb = Colorbar(fig[2, 1], hm, label="frequency", vertical=false,
 		width=@lift Fixed($(pixelarea(ax.scene)).widths[1]))#, ticks=[0, 0.2, 0.4, 0.6])
+	rowsize!(fig.layout, 1, Fixed(pixelarea(ax.scene)[].widths[2]))
+	cb.flipaxis = false
 	resize_to_layout!(fig)
 	save("cv_res_fp.pdf", fig)
 	return fig
