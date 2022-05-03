@@ -343,7 +343,7 @@ md"#### do the training and testing!"
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 2
+	n_runs = 15
 	
 	# list of C-params of the SVC to loop over as candidate hyperparams
 	Cs = 10 .^ range(-5, 0.0, length=15)
@@ -433,8 +433,9 @@ function viz_cv_results(L_opts::Vector{Int},
 		frequency[i, j] += 1
 	end
 	@assert sum(frequency) == n_runs
-	
-	fig = Figure(resolution=(400, 500))
+
+	scale_factor = length(Cs) / length(Ls)
+	fig = Figure()# resolution=(800*scale_factor, 600))
 
 	ax = Axis(fig[1, 1], 
 		      xlabel="SVM C parameter",
@@ -467,8 +468,8 @@ function viz_cv_results(L_opts::Vector{Int},
 	scatter!([id_x], [size(frequency)[1]- id_y + 1], 
 		marker=:star5, color="white", markersize=15)
 
-	Colorbar(fig[2, 1], hm, label="frequency", vertical=false)#, ticks=[0, 0.2, 0.4, 0.6])
-
+	Colorbar(fig[1, 2], hm, label="frequency", height=Relative(3/4))#, ticks=[0, 0.2, 0.4, 0.6])
+	save("cv_res.pdf", fig)
 	return fig
 end
 
@@ -520,8 +521,8 @@ function viz_cv_results_fp(C_opts_fp::Vector{Float64})
 	scatter!([id_x], [size(frequency)[1]- id_y + 1], 
 		marker=:star5, color="white", markersize=15)
 
-	Colorbar(fig[2, 1], hm, label="frequency", vertical=false)#, ticks=[0, 0.2, 0.4, 0.6])
-
+	Colorbar(fig[1, 2], hm, label="frequency", height=Relative(3/4))#, ticks=[0, 0.2, 0.4, 0.6])
+	save("cv_res_fp.pdf", fig)
 	return fig
 end
 
@@ -549,24 +550,40 @@ function viz_test_perf()
 	fig = Figure()
 	ax = Axis(fig[1, 1], 
 		      xticks=(1:4, ["F1 score", "precision", "recall", "accuracy"]),
-		      yticks=0:0.2:1.0
+		      yticks=0:0.2:1.0, title="performance on test set"
 	)
 
-	colors = ColorSchemes.tableau_colorblind[1:2]
-
+	colors = ColorSchemes.seaborn_colorblind6[end-1:end]
+	α = 0.75
+	
 	barplot!(vcat(1:4, 1:4),
 		     vcat(perf, perf_fp),
              dodge=vcat([1 for i = 1:4], [2 for i = 1:4]),
-             color=vcat([colors[1] for i = 1:4], [colors[2] for i = 1:4]),
+             color=vcat([(colors[1], α) for i = 1:4], [(colors[2], α) for i = 1:4]),
 			 label_size=12,
-		     label_formatter=x -> @sprintf("%.2f", x),
-			 bar_labels=:y, label_offset=-100, color_over_background=:white
+		#      label_formatter=x -> @sprintf("%.2f", x),
+		# 	 bar_labels=:y, 
+		# #label_offset=-100, 
+		#      color_over_background=:black,
+		     strokecolor=:black, strokewidth=1
     )
 	errorbars!(collect(1:4) .- 1/5, perf, σ)
 	errorbars!(collect(1:4) .+ 1/5, perf_fp, σ_fp)
+	for i = 1:4
+		text!(@sprintf("%.2f", perf[i]), 
+			position=(i - 1/5, 0.025),
+			color="black", align=(:center, :center),
+			textsize=12
+		)
+		text!(@sprintf("%.2f", perf_fp[i]), 
+			position=(i + 1/5, 0.025),
+			color="black", align=(:center, :center),
+			textsize=12
+		)
+	end
 
 	Legend(fig[1, 2], 
-		[PolyElement(polycolor=colors[i]) for i in 1:2], 
+		[PolyElement(polycolor=(colors[i], α), strokecolor=:black, strokewidth=1) for i in 1:2], 
 		["L-RWGK", "MACCS FP"]
 	)
 	
