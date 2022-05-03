@@ -343,7 +343,7 @@ md"#### do the training and testing!"
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 15
+	n_runs = 100
 	
 	# list of C-params of the SVC to loop over as candidate hyperparams
 	Cs = 10 .^ range(-5, 0.0, length=15)
@@ -435,7 +435,7 @@ function viz_cv_results(L_opts::Vector{Int},
 	@assert sum(frequency) == n_runs
 
 	scale_factor = length(Cs) / length(Ls)
-	fig = Figure()# resolution=(800*scale_factor, 600))
+	fig = Figure()#resolution=(800*scale_factor, 600))
 
 	ax = Axis(fig[1, 1], 
 		      xlabel="SVM C parameter",
@@ -468,7 +468,9 @@ function viz_cv_results(L_opts::Vector{Int},
 	scatter!([id_x], [size(frequency)[1]- id_y + 1], 
 		marker=:star5, color="white", markersize=15)
 
-	Colorbar(fig[1, 2], hm, label="frequency", height=Relative(3/4))#, ticks=[0, 0.2, 0.4, 0.6])
+	Colorbar(fig[2, 1], hm, label="frequency", vertical=false,
+		width=@lift Fixed($(pixelarea(ax.scene)).widths[1]))
+	resize_to_layout!(fig)
 	save("cv_res.pdf", fig)
 	return fig
 end
@@ -489,7 +491,7 @@ function viz_cv_results_fp(C_opts_fp::Vector{Float64})
 	end
 	@assert sum(frequency) == n_runs
 	
-	fig = Figure(resolution=(400, 500))
+	fig = Figure()#resolution=(400, 500))
 
 	ax = Axis(fig[1, 1], 
 		      xlabel="SVM C parameter",
@@ -521,13 +523,18 @@ function viz_cv_results_fp(C_opts_fp::Vector{Float64})
 	scatter!([id_x], [size(frequency)[1]- id_y + 1], 
 		marker=:star5, color="white", markersize=15)
 
-	Colorbar(fig[1, 2], hm, label="frequency", height=Relative(3/4))#, ticks=[0, 0.2, 0.4, 0.6])
+	Colorbar(fig[2, 1], hm, label="frequency", vertical=false,
+		width=@lift Fixed($(pixelarea(ax.scene)).widths[1]))#, ticks=[0, 0.2, 0.4, 0.6])
+	resize_to_layout!(fig)
 	save("cv_res_fp.pdf", fig)
 	return fig
 end
 
 # ╔═╡ 2c2bbf51-61d2-4b0f-b1b2-1a20fd0a3a40
 viz_cv_results_fp(C_opts_fp)
+
+# ╔═╡ fcc59c85-b267-42f5-88cb-51147b4e4ca2
+
 
 # ╔═╡ 2133e986-3916-493d-a6df-70f362a4b4fc
 mean(precisions)
@@ -2103,6 +2110,7 @@ version = "3.5.0+0"
 # ╠═2c2bbf51-61d2-4b0f-b1b2-1a20fd0a3a40
 # ╠═aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
 # ╠═fd7bd14a-efdd-46ac-aaf2-7908a1168da4
+# ╠═fcc59c85-b267-42f5-88cb-51147b4e4ca2
 # ╠═2133e986-3916-493d-a6df-70f362a4b4fc
 # ╠═947c6521-bccc-4d57-b2bf-b686fda2f3b4
 # ╠═efeb6109-8355-4457-996e-e507390505d8
