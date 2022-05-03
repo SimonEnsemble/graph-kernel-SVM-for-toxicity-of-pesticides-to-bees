@@ -18,9 +18,14 @@ for smile in df["SMILES"]:
 
 # compute pairwise similarity matrix
 n = len(fps)
-K = np.eye(n)
+K_TS = np.eye(n) # TanimotoSimilarity
+K_DP = np.eye(n) # dot product
 for i in range(n):
+    x_i = np.array(fps[i].ToList())
     for j in range(n):
-        K[i, j]  = DataStructs.TanimotoSimilarity(fps[i],fps[j])
+        x_j = np.array(fps[j].ToList())
+        K_DP[i, j] = np.dot(x_i, x_j)
+        K_TS[i, j] = DataStructs.TanimotoSimilarity(fps[i],fps[j])
 
-np.save('MACCS_TS_matrix', K)
+np.save('MACCS_TS_matrix', K_TS)
+np.save('MACCS_DP_matrix', K_DP)
