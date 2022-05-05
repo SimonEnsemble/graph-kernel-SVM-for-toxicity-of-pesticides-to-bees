@@ -20,8 +20,10 @@ for smile in df["SMILES"]:
 n = len(fps)
 K_TS = np.eye(n) # TanimotoSimilarity
 K_DP = np.eye(n) # dot product
+X = np.zeros((n, 166))
 for i in range(n):
     x_i = np.array(fps[i].ToList())
+    X[i, :] = x_i[1:]
     for j in range(n):
         x_j = np.array(fps[j].ToList())
         K_DP[i, j] = np.dot(x_i, x_j)
@@ -29,3 +31,4 @@ for i in range(n):
 
 np.save('MACCS_TS_matrix', K_TS)
 np.save('MACCS_DP_matrix', K_DP)
+np.save('MACCS_X', X)
