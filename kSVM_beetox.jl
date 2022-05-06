@@ -172,7 +172,7 @@ end
 
 # ╔═╡ 95b17257-6c55-48f7-b1cc-42cbbce5aa0c
 function compare_similarities(K₁::Matrix{Float64}, K₂::Matrix{Float64},
-	                          kernel₁_name::String, kernel₂_name::String;
+	                          kernel₁_name, kernel₂_name;
 	                          lo::Float64=-Inf, hi::Float64=Inf
 )
 	@assert size(K₁) == size(K₂)
@@ -204,12 +204,13 @@ function compare_similarities(K₁::Matrix{Float64}, K₂::Matrix{Float64},
 	hm = heatmap!(hist_2d.edges[1], hist_2d.edges[2], 
 		          hist_2d.weights, colormap=cmaps)
 	# scatter!(K₁_list, K₂_list, strokewidth=1, strokecolor=(:red, 0.05), color=(:white, 0.0))
-	Colorbar(fig[1, 2], hm, label="# pairs of molecules")#, height=400)
+	Colorbar(fig[1, 2], hm, label=L"# pairs of molecules $(G, G^\prime)$")#, height=400)
 	return fig
 end
 
 # ╔═╡ 4c01515b-b2a2-425f-a258-4e6c0b9ba7e7
-compare_similarities(K_fp, Ks[4], "TS of MACCS FP", "k RWK", lo=-100.0, hi=100.0)
+compare_similarities(K_fp, Ks[4],
+	L"$k^{MACCS}(G, G^\prime)$", L"$k^{(L=4)}(G, G^\prime)$", lo=-100.0, hi=100.0)
 
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
 y = map(t -> class_to_int[t], toxicity) # target vector
