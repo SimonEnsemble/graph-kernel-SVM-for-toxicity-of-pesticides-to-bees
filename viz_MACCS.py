@@ -9,12 +9,29 @@ import copy
 # load SMILES and compute MACCS fingerprints
 df = pd.read_csv("new_smiles.csv")
 smiles = [smile for smile in df["SMILES"]]
-mols = [Chem.MolFromSmiles(smile) for smile in df["SMILES"]]
 
-def viz_maccs(id_mol):
+def get_mol(id_mol):
     # get mol
     this_smiles = smiles[id_mol]
     mol = copy.deepcopy(Chem.MolFromSmiles(this_smiles))
+    return mol
+
+def save_to_svg(svg_string, svg_filename):
+    f = open(svg_filename, "w")
+    f.write(svg_string)
+    f.close()
+
+# build highlights in molecule by getting these substructure matches
+def get_highlight(mol, substructure):
+    highlight = mol.GetSubstructMatches(substructure)
+    hit_ats = []
+    for tp in highlight:
+        for i in tp:
+            hit_ats.append(i)
+    return list(hit_ats)
+
+def viz_maccs(id_mol):
+    mol = get_mol(id_mol)
 
     # compute maccs fingerprint
     fp = MACCSkeys.GenMACCSKeys(mol)
@@ -28,23 +45,27 @@ def viz_maccs(id_mol):
     for onbit in onbits:
         # get smarts pattern and substructure corresponding to this on bit
         smart = smartsPatts[onbit][0]
-        sub = Chem.MolFromSmarts(smart)
+        substructure = Chem.MolFromSmarts(smart)
 
-        # build highlights in molecule by getting these substructure matches
-        highlight = mol.GetSubstructMatches(sub)
-        hit_ats = []
-        for tp in highlight:
-            for i in tp:
-                hit_ats.append(i)
+        # get highlights
+        highlight = get_highlight(mol, substructure)
 
         # append these highlights to list of highlights for each molecule
-        highlight_list.append(list(hit_ats))
+        highlight_list.append(highlight)
     
-    img = Draw.MolsToGridImage(mols, molsPerRow=4, highlightAtomLists=highlight_list, subImgSize=(250, 250), useSVG=True)
+    svg_string = Draw.MolsToGridImage(mols, molsPerRow=4, highlightAtomLists=highlight_list, subImgSize=(250, 250), useSVG=True)
+    save_to_svg(svg_string, "mol_w_highlights_{}.svg".format(id_mol))
     # save to SVG
-    f = open("mol_w_highlights_{}.svg".format(id_mol), "w")
-    f.write(img)
-    f.close()
+
+def viz_one_maccs(id_mol, id_maccs):
+    # get mol
+    mol = get_mol(id_mol)
+
+    # compute maccs fingerprint; assert this is on
+    fp = MACCSkeys.GenMACCSKeys(mol)
+#    assert id_maccs in list(fp.GetOnBits())
+
+
 
 id_mol = 347
 viz_maccs(id_mol)
