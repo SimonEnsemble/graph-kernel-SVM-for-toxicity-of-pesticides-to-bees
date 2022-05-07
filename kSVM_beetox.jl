@@ -344,12 +344,10 @@ md"#### do the training and testing!"
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 10
+	n_runs = 100
 	
 	# list of C-params of the SVC to loop over as candidate hyperparams
-	Cs = 10 .^ range(-5, 0.0, length=15)
-	Cs_fp = 10 .^ range(-1, 1.0, length=15)
-	# Cs = 10 .^ range(-1, 3, length=15) for grwk
+	Cs = 10.0 .^ collect(range(-5, 0.0, length=6))
 	
 	# store test set performance metrics
 	@assert class_to_int["Toxic"] == 1 # for toxic = "positive"
@@ -401,7 +399,7 @@ begin
 		fingerprint representation
 		=#
 		# cross-validation to get optimal L, C
-		C_opt_fp = cv_run(K_fp, y, kf, Cs_fp)
+		C_opt_fp = cv_run(K_fp, y, kf, Cs)
 		C_opts_fp[r] = C_opt_fp
 
 		# train deployment model (with C=C_opt) on all cv data
@@ -422,34 +420,57 @@ md"#### vis results"
 
 # ╔═╡ aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
 function viz_cv_results(L_opts::Vector{Int},
-	                    C_opts::Vector{Float64})
-	cmap = ColorSchemes.amp
+	                    C_opts::Vector{Float64},
+	  					C_opts_fp::Vector{Float64},
+)
+	cmap = reverse(ColorSchemes.ice)
 
 	# rows = L
 	# cols = C
 	frequency = zeros(Int, length(Ls), length(Cs))
+	frequency_fp = zeros(Int, 1, length(Cs))
 	for r = 1:n_runs
 		i = findfirst(Ls .== L_opts[r])
 		j = findfirst(Cs .== C_opts[r])
 		frequency[i, j] += 1
+		
+		j_fp = findfirst(Cs .== C_opts_fp[r])
+		frequency_fp[1, j_fp] += 1
 	end
 	@assert sum(frequency) == n_runs
+	@assert sum(frequency_fp) == n_runs
+	frequency /= maximum(frequency)
+	frequency_fp /= maximum(frequency_fp)
+
+	colorrange = (0, maximum([maximum(frequency), maximum(frequency_fp)]))
 
 	scale_factor = length(Cs) / length(Ls)
 	fig = Figure()#resolution=(800*scale_factor, 600))
 
 	ax = Axis(fig[1, 1], 
-		      xlabel="SVM C parameter",
-			  ylabel="walk length, L",
+			  xlabel="walk length, L",
+		      ylabel="SVM C parameter",
 		      aspect=DataAspect(),
-			  xticks=(1:length(Cs), 
-			          ["$(round(C, digits=5))" for C in Cs]),
-			  yticks=(1:length(Ls), 
-			          ["$L" for L in reverse(Ls)]),
-			  
-			  xticklabelrotation=π/2,
-			  title="optimal hyperparams\nin $n_folds-fold cross-validation\nL-RWGK"
+			  xticks=(1:length(Ls), 
+			          ["$L" for L in Ls]),
+			  yticks=(1:length(Cs), 
+			          ["$(round(C, digits=5))" for C in reverse(Cs)]),
+		      title="L-RWGK"
+			  # xticklabelrotation=π/2,
+			  # title="optimal hyperparams\nin $n_folds-fold cross-validation\nL-RWGK"
 	)
+	ax_fp = Axis(fig[1, 2], 
+		        xticks=([0], ["MACCS"]),
+		 aspect=DataAspect(),
+				# xticklabelrotation=π / 2, 
+				yticks=(1:length(Cs), 
+				       ["$(round(C, digits=5))" for C in reverse(Cs)]),
+		        title="MACCS\nFP"
+	)
+	
+	hideydecorations!(ax_fp, grid=true)
+
+	colsize!(fig.layout, 2, Auto(0.1))
 
 	# to understand the reverse:
 		# function test_hm(A)
@@ -461,80 +482,39 @@ function viz_cv_results(L_opts::Vector{Int},
 		# 	heatmap!(1:size(A)[2], 1:size(A)[1], reverse(A, dims=1)')
 		# 	fig
 		# end
-	hm = heatmap!(ax, 1:length(Cs), 1:length(Ls), 
-		reverse(frequency, dims=1)', colormap=cmap)
-
+	hm = heatmap!(ax, 1:length(Ls), 1:length(Cs), 
+		reverse(frequency', dims=1)', colormap=cmap, colorrange=colorrange)
+	
+	hm_fp = heatmap!(ax_fp, 1:1, 1:length(Cs), 
+		reverse(frequency_fp', dims=1)', colormap=cmap, colorrange=colorrange)
+	
+	linkyaxes!(ax, ax_fp)
+	
 	# plot optimal as star.
-	id_y, id_x = argmax(frequency).I # column is x; row is y.
-	scatter!([id_x], [size(frequency)[1]- id_y + 1], 
+	id_y, id_x = argmax(frequency').I # column is x; row is y.
+	scatter!(ax, [id_x], [size(frequency')[1]- id_y + 1], 
 		marker=:star5, color="white", markersize=15)
 
-	Colorbar(fig[2, 1], hm, label="frequency", vertical=false,
-		width=@lift Fixed($(pixelarea(ax.scene)).widths[1]))
-	resize_to_layout!(fig)
-	save("cv_res.pdf", fig)
+	# plot optimal as star.
+	id_y, id_x = argmax(frequency_fp').I # column is x; row is y.
+	scatter!(ax_fp, [id_x], [size(frequency')[1]- id_y + 1], 
+		marker=:star5, color="white", markersize=15)
+
+	Colorbar(fig[1, 3], hm, label="~density", vertical=true,
+		height=@lift Fixed($(pixelarea(ax.scene)).widths[2]))
+	supertitle = Label(fig[0, :], 
+		"hyperparam exploration via $n_folds-folds CV", 
+		textsize=20)
+
+	# Colorbar(fig[1, 3], hm, label="frequency", vertical=true)#,
+		#width=@lift Fixed($(pixelarea(ax.scene)).widths[1]))
+	# resize_to_layout!(fig)
+	# save("cv_res.pdf", fig)
 	return fig
 end
 
 # ╔═╡ b1242967-8c91-43c0-9b3d-31973045f946
-viz_cv_results(L_opts, C_opts)
-
-# ╔═╡ fd7bd14a-efdd-46ac-aaf2-7908a1168da4
-function viz_cv_results_fp(C_opts_fp::Vector{Float64})
-	cmap = ColorSchemes.algae
-
-	# rows = L
-	# cols = C
-	frequency = zeros(Int, 1, length(Cs_fp))
-	for r = 1:n_runs
-		j = findfirst(Cs_fp .== C_opts_fp[r])
-		frequency[1, j] += 1
-	end
-	@assert sum(frequency) == n_runs
-	
-	fig = Figure()#resolution=(400, 500))
-
-	ax = Axis(fig[1, 1], 
-		      xlabel="SVM C parameter",
-			  ylabel="",
-		      aspect=DataAspect(),
-			  xticks=(1:length(Cs_fp), 
-			          ["$(round(C, digits=5))" for C in Cs_fp]),
-			  yticks=(1:1, 
-			          [""]),
-			  xticklabelrotation=π/2,
-			  title="optimal hyperparams\nin $n_folds-fold cross-validation\nMACCS fingerprint"
-	)
-
-	# to understand the reverse:
-		# function test_hm(A)
-		# 	fig = Figure()
-		# 	ax = Axis(fig[1, 1], 
-		# 		xticks=1:1:size(A)[2],
-		# 		yticks=(1:size(A)[1], ["$x" for x in reverse(1:size(A)[1])])
-		# 	)
-		# 	heatmap!(1:size(A)[2], 1:size(A)[1], reverse(A, dims=1)')
-		# 	fig
-		# end
-	hm = heatmap!(ax, 1:length(Cs), 1:1, 
-		reverse(frequency, dims=1)', colormap=cmap)
-
-	# plot optimal as star.
-	id_y, id_x = argmax(frequency).I # column is x; row is y.
-	scatter!([id_x], [size(frequency)[1]- id_y + 1], 
-		marker=:star5, color="white", markersize=15)
-
-	cb = Colorbar(fig[2, 1], hm, label="frequency", vertical=false,
-		width=@lift Fixed($(pixelarea(ax.scene)).widths[1]))#, ticks=[0, 0.2, 0.4, 0.6])
-	rowsize!(fig.layout, 1, Fixed(pixelarea(ax.scene)[].widths[2]))
-	cb.flipaxis = false
-	resize_to_layout!(fig)
-	save("cv_res_fp.pdf", fig)
-	return fig
-end
-
-# ╔═╡ 2c2bbf51-61d2-4b0f-b1b2-1a20fd0a3a40
-viz_cv_results_fp(C_opts_fp)
+viz_cv_results(L_opts, C_opts, C_opts_fp)
 
 # ╔═╡ 2133e986-3916-493d-a6df-70f362a4b4fc
 mean(precisions)
@@ -698,12 +678,12 @@ begin
 		w_colors = [wᵢ < 0.0 ? colors["Nontoxic"] : colors["Toxic"] for wᵢ in w]
 		fig = Figure()
 		ax  = Axis(fig[1, 1], ylabel="coefficient, wᵢ", xlabel="MACCS key i",
-			xticks=(1:166, ["" for i = 1:166])
+			xticks=(1:166, ["" for i = 1:166]), yticks=-0.3:0.1:0.3
 		)
 		hlines!(ax, [0], color="gray")
 		barplot!(1:166, w, color=w_colors)
 		xlims!(1, 166)
-		ylims!(-1.5, 1.5)
+		ylims!(-0.3, 0.3)
 		return fig
 	end
 
@@ -750,9 +730,8 @@ StatsBase = "~0.33.16"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.0-DEV.1390"
+julia_version = "1.7.1"
 manifest_format = "2.0"
-project_hash = "5bfbbe68879e08fd85bd81d26365ee0ab0b12c10"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -785,7 +764,6 @@ version = "0.4.1"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
-version = "1.1.1"
 
 [[deps.ArrayInterface]]
 deps = ["Compat", "IfElse", "LinearAlgebra", "Requires", "SparseArrays", "Static"]
@@ -915,7 +893,6 @@ version = "3.43.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "0.5.0+0"
 
 [[deps.ComputationalResources]]
 git-tree-sha1 = "52cb3ec90e8a8bea0e62e275ba577ad0f74821f7"
@@ -958,9 +935,9 @@ version = "1.3.4"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
-git-tree-sha1 = "3daef5523dd2e769dad2365274f760ff5f282c7d"
+git-tree-sha1 = "cc1a8e22627f33c789ab60b36a9132ac050bbf75"
 uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-version = "0.18.11"
+version = "0.18.12"
 
 [[deps.DataValueInterfaces]]
 git-tree-sha1 = "bfc1187b79289637fa0ef6d4436ebdfe6905cbd6"
@@ -987,9 +964,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.Distributions]]
 deps = ["ChainRulesCore", "DensityInterface", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Test"]
-git-tree-sha1 = "f206814c860c2a909d2a467af0484d08edd05ee7"
+git-tree-sha1 = "8a6b49396a4058771c5c072239b2e0a76e2e898c"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.57"
+version = "0.25.58"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -998,9 +975,8 @@ uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.8.6"
 
 [[deps.Downloads]]
-deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
+deps = ["ArgTools", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
-version = "1.6.0"
 
 [[deps.EarCut_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1055,9 +1031,6 @@ deps = ["Compat", "Dates", "Mmap", "Printf", "Test", "UUIDs"]
 git-tree-sha1 = "129b104185df66e408edd6625d480b7f9e9823a0"
 uuid = "48062228-2e41-5def-b9a4-89aafe57970f"
 version = "0.9.18"
-
-[[deps.FileWatching]]
-uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -1339,12 +1312,10 @@ version = "0.4.1"
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
-version = "0.6.3"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "7.73.0+4"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -1353,7 +1324,6 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.9.1+2"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -1478,7 +1448,6 @@ version = "0.2.1"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.24.0+2"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -1503,7 +1472,6 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2020.7.22"
 
 [[deps.NPZ]]
 deps = ["Compat", "FileIO", "ZipFile"]
@@ -1524,7 +1492,6 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
-version = "1.2.0"
 
 [[deps.Nullables]]
 git-tree-sha1 = "8f87854cc8f3685a60689d8edecaa29d2251979b"
@@ -1551,7 +1518,6 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.17+2"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -1568,7 +1534,6 @@ version = "3.1.1+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1650,7 +1615,6 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -1776,7 +1740,6 @@ version = "0.3.0+0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
-version = "0.7.0"
 
 [[deps.SIMD]]
 git-tree-sha1 = "7dbc15af7ed5f751a82bf3ed37757adf76c32402"
@@ -1933,7 +1896,6 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
-version = "1.0.0"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
@@ -1950,7 +1912,6 @@ version = "1.7.0"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -2102,7 +2063,6 @@ version = "0.9.4"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-version = "1.2.12+1"
 
 [[deps.coordgenlibs_jll]]
 deps = ["Libdl", "Pkg"]
@@ -2125,7 +2085,6 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "4.0.0+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -2160,12 +2119,10 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.41.0+1"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "16.2.1+1"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -2208,9 +2165,7 @@ version = "3.5.0+0"
 # ╠═4178d448-bb47-4f70-ab60-7d0307ef8829
 # ╟─458efa24-2e3d-486a-aee0-31887bc6ac55
 # ╠═b1242967-8c91-43c0-9b3d-31973045f946
-# ╠═2c2bbf51-61d2-4b0f-b1b2-1a20fd0a3a40
 # ╠═aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
-# ╠═fd7bd14a-efdd-46ac-aaf2-7908a1168da4
 # ╠═2133e986-3916-493d-a6df-70f362a4b4fc
 # ╠═947c6521-bccc-4d57-b2bf-b686fda2f3b4
 # ╠═efeb6109-8355-4457-996e-e507390505d8
