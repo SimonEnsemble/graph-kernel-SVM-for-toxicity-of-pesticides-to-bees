@@ -209,8 +209,8 @@ function compare_similarities(K₁::Matrix{Float64}, K₂::Matrix{Float64},
 end
 
 # ╔═╡ 4c01515b-b2a2-425f-a258-4e6c0b9ba7e7
-compare_similarities(K_fp, Ks[4],
-	L"$k^{MACCS}(G, G^\prime)$", L"$k^{(L=4)}(G, G^\prime)$", lo=-100.0, hi=100.0)
+compare_similarities(K_fp, Ks[6],
+	L"$k^{MACCS}(G, G^\prime)$", L"$k^{(L=6)}(G, G^\prime)$", lo=-2000.0, hi=3000.0)
 
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
 y = map(t -> class_to_int[t], toxicity) # target vector
@@ -344,10 +344,10 @@ md"#### do the training and testing!"
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 100
+	n_runs = 500
 	
 	# list of C-params of the SVC to loop over as candidate hyperparams
-	Cs = 10.0 .^ collect(range(-5, 0.0, length=6))
+	Cs = 10.0 .^ collect(range(-5, 1.0, length=7))
 	
 	# store test set performance metrics
 	@assert class_to_int["Toxic"] == 1 # for toxic = "positive"
@@ -516,12 +516,6 @@ end
 # ╔═╡ b1242967-8c91-43c0-9b3d-31973045f946
 viz_cv_results(L_opts, C_opts, C_opts_fp)
 
-# ╔═╡ 2133e986-3916-493d-a6df-70f362a4b4fc
-mean(precisions)
-
-# ╔═╡ 947c6521-bccc-4d57-b2bf-b686fda2f3b4
-mean(precisions_fp)
-
 # ╔═╡ efeb6109-8355-4457-996e-e507390505d8
 function viz_test_perf()
 	perf = [mean(f1_scores), mean(precisions), 
@@ -537,7 +531,8 @@ function viz_test_perf()
 	fig = Figure()
 	ax = Axis(fig[1, 1], 
 		      xticks=(1:4, ["F1 score", "precision", "recall", "accuracy"]),
-		      yticks=0:0.2:1.0, title="performance on test set"
+		      yticks=0:0.2:1.0, title="performance on test set",
+		      xticklabelrotation=π/2,
 	)
 
 	colors = ColorSchemes.seaborn_colorblind6[end-1:end]
@@ -678,12 +673,13 @@ begin
 		w_colors = [wᵢ < 0.0 ? colors["Nontoxic"] : colors["Toxic"] for wᵢ in w]
 		fig = Figure()
 		ax  = Axis(fig[1, 1], ylabel="coefficient, wᵢ", xlabel="MACCS key i",
-			xticks=(1:166, ["" for i = 1:166]), yticks=-0.3:0.1:0.3
+			xticks=(1:166, ["" for i = 1:166]), yticks=-0.5:0.1:0.5,
+		    ygridvisible=false
 		)
 		hlines!(ax, [0], color="gray")
 		barplot!(1:166, w, color=w_colors)
 		xlims!(1, 166)
-		ylims!(-0.3, 0.3)
+		ylims!(-0.5, 0.5)
 		return fig
 	end
 
@@ -2166,8 +2162,6 @@ version = "3.5.0+0"
 # ╟─458efa24-2e3d-486a-aee0-31887bc6ac55
 # ╠═b1242967-8c91-43c0-9b3d-31973045f946
 # ╠═aaa8ffc7-fb56-4ea5-b07f-6f9695460ae3
-# ╠═2133e986-3916-493d-a6df-70f362a4b4fc
-# ╠═947c6521-bccc-4d57-b2bf-b686fda2f3b4
 # ╠═efeb6109-8355-4457-996e-e507390505d8
 # ╠═819d71a2-e831-4c82-a3df-6622f953733e
 # ╠═8d2dd082-b587-4bcc-9b5a-cf38375927ba
