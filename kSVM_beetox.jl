@@ -205,6 +205,7 @@ function compare_similarities(K₁::Matrix{Float64}, K₂::Matrix{Float64},
 		          hist_2d.weights, colormap=cmaps)
 	# scatter!(K₁_list, K₂_list, strokewidth=1, strokecolor=(:red, 0.05), color=(:white, 0.0))
 	Colorbar(fig[1, 2], hm, label=L"# pairs of molecules $(G, G^\prime)$")#, height=400)
+	save("pairwise_similarity.pdf", fig)
 	return fig
 end
 
@@ -509,7 +510,7 @@ function viz_cv_results(L_opts::Vector{Int},
 	# Colorbar(fig[1, 3], hm, label="frequency", vertical=true)#,
 		#width=@lift Fixed($(pixelarea(ax.scene)).widths[1]))
 	# resize_to_layout!(fig)
-	# save("cv_res.pdf", fig)
+	save("cv_results.pdf", fig)
 	return fig
 end
 
@@ -570,6 +571,7 @@ function viz_test_perf()
 	)
 	
 	ylims!(0, 1)
+	save("test_performance_results.pdf", fig)
 	return fig
 end
 
@@ -680,6 +682,7 @@ begin
 		barplot!(1:166, w, color=w_colors)
 		xlims!(1, 166)
 		ylims!(-0.5, 0.5)
+		save("SVM_w.pdf", fig)
 		return fig
 	end
 
