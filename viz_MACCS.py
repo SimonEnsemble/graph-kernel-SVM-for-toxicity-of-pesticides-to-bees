@@ -108,9 +108,8 @@ def viz_one_maccs(id_mol, onbit, just_one=False):
     svg_string = Draw.MolsToGridImage([mol], highlightAtomLists=[highlight], **grid_image_kwargs)
     save_to_svg(svg_string, "mol_w_highlights_{}_onbit_{}.svg".format(id_mol, onbit))
 
-
+# rsvg-convert -f pdf -o mygraph.pdf mol_w_highlights_347.svg to convert svg to pdf
 
 id_mol = 347
 viz_maccs(id_mol, False)
 viz_molecule(id_mol)
-viz_one_maccs(10-1, 104)
