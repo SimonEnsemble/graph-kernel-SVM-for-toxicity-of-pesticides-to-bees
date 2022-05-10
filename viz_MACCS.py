@@ -10,7 +10,7 @@ import copy
 df = pd.read_csv("new_smiles.csv")
 smiles = [smile for smile in df["SMILES"]]
 
-hl_color = (0.4, 1.0, 1.0, 0.0) # first one is alpha
+hl_color = (0.5, 0.97, 0.73, 0.0) # first one is alpha
 grid_image_kwargs = {"molsPerRow": 12, "useSVG": True, "subImgSize": (250, 250)}
 
 def build_highlight_colors():
