@@ -81,6 +81,22 @@ begin
 	HTML(d)
 end
 
+# ╔═╡ 7be2c185-35f9-4a97-9c22-ad15abadf770
+bondorder(other_mol)
+
+# ╔═╡ 043a2990-d665-4b08-be7c-e44652f1ea16
+isaromaticbond(other_mol)
+
+# ╔═╡ 4993a3b1-d020-45f6-a694-cc3256822fc9
+for (i, (vᵢ, vⱼ)) in enumerate(other_mol.edges)
+	println("edge ", i, " is ", (vᵢ, vⱼ))
+	println("\tspecies: ", atomsymbol(other_mol)[vᵢ], "-", atomsymbol(other_mol)[vⱼ])
+	println("\taromatic? ", isaromaticbond(other_mol)[i])
+end
+
+# ╔═╡ b2628b06-3804-4fb5-813c-b67f59a9a36a
+atomsymbol(other_mol)
+
 # ╔═╡ b907dfea-cab3-4350-a51f-00f6e8cd7670
 begin
 	da = viz_molecule(mol_a, "molecule_a.svg")
@@ -303,6 +319,10 @@ ne(axb)
 # ╠═a6e669b2-bdf8-4786-bf30-6b73302cca27
 # ╠═f27b6ba8-72b4-4ff2-bb8e-5bd8892771da
 # ╠═a3f80472-8d74-4bad-b0a8-6a32cef149ed
+# ╠═7be2c185-35f9-4a97-9c22-ad15abadf770
+# ╠═043a2990-d665-4b08-be7c-e44652f1ea16
+# ╠═4993a3b1-d020-45f6-a694-cc3256822fc9
+# ╠═b2628b06-3804-4fb5-813c-b67f59a9a36a
 # ╠═b907dfea-cab3-4350-a51f-00f6e8cd7670
 # ╠═c6b5616b-d1a8-4cf1-b97b-cf0c142b1fa3
 # ╠═a521f480-c5b5-4a60-8f9f-52b45ad39dac
