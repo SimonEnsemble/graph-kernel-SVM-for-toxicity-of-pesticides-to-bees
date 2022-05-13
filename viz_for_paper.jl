@@ -19,6 +19,9 @@ DRAW_SETTING[:C_visible] = true
 # ╔═╡ b73e7f22-cd3e-4e47-8561-220f9151f948
 data = CSV.read("new_smiles.csv", DataFrame)
 
+# ╔═╡ 0d035b37-a9e6-4081-a95a-229cc3b5befa
+md"find unique elements for paper"
+
 # ╔═╡ 079b7e01-25f7-4e3e-90c3-4783c70b4790
 begin
 	unique_elements = []
@@ -30,6 +33,7 @@ begin
 			end
 		end
 	end
+	unique_elements
 end
 
 # ╔═╡ daea02b2-2f26-4c78-b96f-82a524aff8c4
@@ -81,22 +85,6 @@ begin
 	HTML(d)
 end
 
-# ╔═╡ 7be2c185-35f9-4a97-9c22-ad15abadf770
-bondorder(other_mol)
-
-# ╔═╡ 043a2990-d665-4b08-be7c-e44652f1ea16
-isaromaticbond(other_mol)
-
-# ╔═╡ 4993a3b1-d020-45f6-a694-cc3256822fc9
-for (i, (vᵢ, vⱼ)) in enumerate(other_mol.edges)
-	println("edge ", i, " is ", (vᵢ, vⱼ))
-	println("\tspecies: ", atomsymbol(other_mol)[vᵢ], "-", atomsymbol(other_mol)[vⱼ])
-	println("\taromatic? ", isaromaticbond(other_mol)[i])
-end
-
-# ╔═╡ b2628b06-3804-4fb5-813c-b67f59a9a36a
-atomsymbol(other_mol)
-
 # ╔═╡ b907dfea-cab3-4350-a51f-00f6e8cd7670
 begin
 	da = viz_molecule(mol_a, "molecule_a.svg")
@@ -116,126 +104,91 @@ run(`inkscape molecule_a.svg --export-pdf=Fig2a_molecule_a.pdf`)
 run(`inkscape molecule_b.svg --export-pdf=Fig2b_molecule_b.pdf`)
 
 # ╔═╡ eac14468-06d5-42ce-ac86-890ef38c0b00
-function viz_graph(mol::GraphMol)
+function viz_graph(mol::GraphMol; savename=nothing, append_prime::Bool=false)
     graph = SimpleGraph(length(atomsymbol(mol)))
     for (vᵢ, vⱼ) in mol.edges
-        add_edge!(graph, vᵢ, vⱼ)
+        add_edge!(graph, vᵢ, vⱼ) # warning: does not preserve edge order.
     end
 	
-    edgelabels = ["$b" for b in bondorder(mol)]
-    edgelabels[isaromaticbond(mol)] .= "a"
+	# for (i, (vᵢ, vⱼ)) in enumerate(mol.edges)
+	# 	println("mol edge ", i, " is ", (vᵢ, vⱼ))
+	# 	println("\tspecies: ", atomsymbol(mol)[vᵢ], "-", atomsymbol(mol)[vⱼ])
+	# 	println("\taromatic? ", isaromaticbond(mol)[i])
+	# end
+	
+	edgelabels = ["" for b in bondorder(mol)] # in order of graph
+	for (i_graph, ed) in enumerate(edges(graph))
+		# find which edge this is in the mol.
+		for (i_mol, (vᵢ, vⱼ)) in enumerate(mol.edges)
+			if ((vᵢ, vⱼ) == (ed.src, ed.dst)) || ((vᵢ, vⱼ) == (ed.dst, ed.src))
+				# println("graph edge ", i_graph, " is mol edge ", i_mol)
+				# edgelabels[i_graph] = "$((vᵢ, vⱼ))"
+				# println("\taromatic?", isaromaticbond(mol)[i_mol])
+				edgelabels[i_graph] = "$(bondorder(mol)[i_mol])"
+				if isaromaticbond(mol)[i_mol]
+					edgelabels[i_graph] = "a"
+				end
+				break # found it!
+			end
+		end
+	end
 
 	locs_x, locs_y = spring_layout(graph, C=0.25)
 	# locs_x, locs_y = circular_layout(graph)
-	gplot(graph, locs_x, locs_y,
+
+	nodelabels = ["v<sub>$i</sub>" for i = 1:nv(graph)]
+	if append_prime
+		nodelabels = ["v′<sub>$i</sub>" for i = 1:nv(graph)]
+	end
+	
+	gp = gplot(graph, locs_x, locs_y,
 	      nodestrokec=[RGB(rgb.r/255, rgb.g/255, rgb.b/255) for rgb in atomcolor(mol)],
-		  nodefillc=RGBA(1.0, 1.0, 1.0, 0.0),
-		NODELABELSIZE=5.0,
-		EDGELABELSIZE=5.0,
+		nodesize=1.0,
+		NODESIZE=0.3 / sqrt(nv(graph)),
+		  nodefillc=[RGBA(rgb.r/255, rgb.g/255, rgb.b/255, 0.075) for rgb in atomcolor(mol)], #RGBA(1.0, 1.0, 1.0, 0.0),
+		  # nodelabelc=RGB(1.0, 1.0, 1.0),
+		  NODELABELSIZE=5.0,
+		  EDGELABELSIZE=5.0,
           # nodefillc=RGB(1.0,1.0,1.0),
-		EDGELINEWIDTH=20.0/nv(graph),
+		  EDGELINEWIDTH=15.0/nv(graph),
 	      # nodestrokec = colorant"black",
-	      nodestrokelw=3,
-          nodelabel=["$i" for i = 1:nv(graph)],
-          edgelinewidth=2,
-          edgelabel = edgelabels)
-end
+	      nodestrokelw=1,
+          nodelabel=nodelabels,
+          edgelinewidth=1,
+          edgelabel=edgelabels
+	)
 
-# ╔═╡ a3f80472-8d74-4bad-b0a8-6a32cef149ed
-viz_graph(other_mol)
-
-# ╔═╡ 26ac6c3c-6f60-46b7-af9d-b4c3c35295a8
-begin
-	graph_a = SimpleGraph(length(atomsymbol(mol_a)))
-    for (vᵢ, vⱼ) in mol_a.edges
-        add_edge!(graph_a, vᵢ, vⱼ)
-    end
-	
-    edgelabels = ["$b" for b in bondorder(mol_a)]
-    edgelabels[isaromaticbond(mol_a)] .= "a"
-
-	nodefill_a = []
-	for i = 1:length(atomsymbol(mol_a))
-		if 1<=i<=2 || 5<=i<=6 || 9<=i<=13
-			push!(nodefill_a, RGBA(1.0,1.0,1.0,0.0))
-		else
-			push!(nodefill_a, RGB(1.0,0.988,0.0))
-		end
+	if ! isnothing(savename)
+		draw(PDF(savename * ".pdf", 13cm, 13cm), gp)
 	end
-
-	locs_x_a, locs_y_a = spring_layout(graph_a, C=0.25)
-	# locs_x, locs_y = circular_layout(graph)
-	gga = gplot(graph_a, locs_x_a, locs_y_a,
-	      nodestrokec=[RGB(rgb.r/255, rgb.g/255, rgb.b/255) for rgb in atomcolor(mol_a)],
-		  nodefillc=nodefill_a,
-		NODELABELSIZE=5.0,
-		EDGELABELSIZE=5.0,
-          # nodefillc=RGB(1.0,1.0,1.0),
-		EDGELINEWIDTH=20.0/nv(graph_a),
-	      # nodestrokec = colorant"black",
-	      nodestrokelw=3,
-          nodelabel=["$i" for i = 1:nv(graph_a)],
-          edgelinewidth=2,
-          edgelabel = edgelabels)
+	return gp
 end
 
-# ╔═╡ b89d2a05-b5d7-4aba-8a62-4c01e8ca59b0
-draw(PDF("Fig2c_graph_a_hl.pdf", 20cm, 20cm), gga)
+# ╔═╡ afda4de4-909e-4b82-bc4c-3c3695321ffd
+viz_graph(other_mol, savename="mol_347_graph")
 
-# ╔═╡ d7912d52-f141-4ed7-ac18-39a588891de6
-begin
-	graph_b = SimpleGraph(length(atomsymbol(mol_b)))
-    for (vᵢ, vⱼ) in mol_b.edges
-        add_edge!(graph_b, vᵢ, vⱼ)
-    end
-	
-    edgelabels_b = ["$b" for b in bondorder(mol_b)]
-    edgelabels_b[isaromaticbond(mol_b)] .= "a"
+# ╔═╡ 22bbe372-62c9-4982-a02c-12081e84c984
+viz_graph(mol_a, savename="mol_a_graph")
 
-	nodefill_b = []
-	for i = 1:length(atomsymbol(mol_b))
-		if 1<=i<=3 || i == 5
-			push!(nodefill_b, RGB(1.0,0.988,0.0))
-		else
-			push!(nodefill_b, RGB(1.0,1.0,1.0))
-		end
-	end
-
-	locs_x_b, locs_y_b = spring_layout(graph_b, C=0.25)
-	# locs_x, locs_y = circular_layout(graph)
-	ggb = gplot(graph_b, locs_x_b, locs_y_b,
-	      nodestrokec=[RGB(rgb.r/255, rgb.g/255, rgb.b/255) for rgb in atomcolor(mol_b)],
-		  nodefillc=nodefill_b,
-		NODELABELSIZE=5.0,
-		EDGELABELSIZE=5.0,
-          # nodefillc=RGB(1.0,1.0,1.0),
-		EDGELINEWIDTH=20.0/nv(graph_b),
-	      # nodestrokec = colorant"black",
-	      nodestrokelw=3,
-          nodelabel=["$i" for i = 1:nv(graph_b)],
-          edgelinewidth=2,
-          edgelabel = edgelabels_b)
-end
-
-# ╔═╡ 82d4d058-1ac5-4c2a-b85a-a45ded8fe082
-draw(PDF("Fig2d_graph_b_hl.pdf", 15cm, 15cm), ggb)
+# ╔═╡ bf7555f6-7fbb-4bcf-800a-558c93ff8d48
+viz_graph(mol_b, savename="mol_b_graph", append_prime=true)
 
 # ╔═╡ 3569a3dc-a1d4-4574-9e60-a254c53377f1
 axb = direct_product_graph(mol_a, mol_b, 
 	store_vertex_pair=true, store_nodelabel=true, store_edgelabel=true)
 
-# ╔═╡ 64c7263e-e959-4068-a4d7-9f1c806ee893
-w = [(4, 5), (3, 3), (2, 2), (1, 1)]
-
 # ╔═╡ 0b7d99ac-a23d-4ced-8b27-f57741924bc9
 begin
 	axb_node = [get_prop(axb, i, :label) for i in vertices(axb)]
 	axb_colors = []
+	axb_fcolors = []
 	for v in 1:nv(axb)
 		rgb = atomcolor(mol_a)[get_prop(axb, v, :vertex_pair)[1]]
 		push!(axb_colors, RGB(rgb.r/255, rgb.g/255, rgb.b/255))
+		push!(axb_fcolors, RGBA(rgb.r/255, rgb.g/255, rgb.b/255, 0.075))
 	end
 	axb_nodepair = [get_prop(axb, i, :vertex_pair) for i in vertices(axb)]
+	axb_nodelabel = ["( v<sub>$i</sub>, v′<sub>$j</sub> )" for (i, j) in axb_nodepair]
 	axb_edgelabel = [get_prop(axb, i, :bondorder) for i in 1:ne(axb)]
 	order_list = ["$i" for i = 1:nv(axb)]
 	nlist = Vector{Vector{Int}}(undef, 2) # two shells
@@ -264,32 +217,22 @@ begin
 	locs_y[6] -= 0.1
 	locs_y[7] -= 0.1
 	
-	# for highlight a walk example
-	nodefill = []
-	for i = 1:17
-		if i == 14|| i == 12|| i == 5|| i == 7
-			push!(nodefill, RGB(1.0, 0.988, 0.0))
-		else
-			push!(nodefill, RGBA(1.0,1.0,1.0,0.0))
-		end
-	end
-
 	g = gplot(axb, locs_x, locs_y, 
-	      nodefillc = nodefill, # change to nodefill to highlight
+	      nodefillc =axb_fcolors, # change to nodefill to highlight
 		# linetype="curve",
 	      nodestrokec=axb_colors,
 	      nodestrokelw=1,
 			# NODELABELSIZE=5.0,
 		  EDGELABELSIZE=5.0,
-	      NODESIZE=0.45 / sqrt(nv(axb)),
-	      nodelabel=axb_nodepair, # change to orderlist to debug
+	      NODESIZE=0.7 / sqrt(nv(axb)),
+	      nodelabel=axb_nodelabel, # change to orderlist to debug
 	      EDGELINEWIDTH=25.0/nv(axb),
 	      edgelabel=axb_edgelabel,
 	      edgelabelsize=2.0)
-end
 
-# ╔═╡ ee75cb9c-6cae-4a38-bb1c-57af21f6dfd7
-draw(PDF("Fig2e_dpg_example.pdf", 16cm, 16cm), g)
+	draw(PDF("dpg_example.pdf", 16cm, 16cm), g)
+	g
+end
 
 # ╔═╡ 4dbcad70-c777-44b9-b838-810d0f258eaf
 fixed_length_rw_kernel(mol_a, mol_b, 0)
@@ -307,6 +250,7 @@ ne(axb)
 # ╠═e85331d0-9732-11ec-350c-e7f3c76bca59
 # ╠═36af2a96-2edc-4163-9b90-c31dc72feb39
 # ╠═b73e7f22-cd3e-4e47-8561-220f9151f948
+# ╟─0d035b37-a9e6-4081-a95a-229cc3b5befa
 # ╠═079b7e01-25f7-4e3e-90c3-4783c70b4790
 # ╠═daea02b2-2f26-4c78-b96f-82a524aff8c4
 # ╠═5d67ebae-d960-46d8-9443-10029fcdbee7
@@ -318,24 +262,16 @@ ne(axb)
 # ╠═ea275a9a-a7df-49ff-9c71-ff88033ed28a
 # ╠═a6e669b2-bdf8-4786-bf30-6b73302cca27
 # ╠═f27b6ba8-72b4-4ff2-bb8e-5bd8892771da
-# ╠═a3f80472-8d74-4bad-b0a8-6a32cef149ed
-# ╠═7be2c185-35f9-4a97-9c22-ad15abadf770
-# ╠═043a2990-d665-4b08-be7c-e44652f1ea16
-# ╠═4993a3b1-d020-45f6-a694-cc3256822fc9
-# ╠═b2628b06-3804-4fb5-813c-b67f59a9a36a
 # ╠═b907dfea-cab3-4350-a51f-00f6e8cd7670
 # ╠═c6b5616b-d1a8-4cf1-b97b-cf0c142b1fa3
 # ╠═a521f480-c5b5-4a60-8f9f-52b45ad39dac
 # ╠═179dc2b3-59be-4719-9cec-059dfa447301
+# ╠═afda4de4-909e-4b82-bc4c-3c3695321ffd
+# ╠═22bbe372-62c9-4982-a02c-12081e84c984
+# ╠═bf7555f6-7fbb-4bcf-800a-558c93ff8d48
 # ╠═eac14468-06d5-42ce-ac86-890ef38c0b00
-# ╠═26ac6c3c-6f60-46b7-af9d-b4c3c35295a8
-# ╠═b89d2a05-b5d7-4aba-8a62-4c01e8ca59b0
-# ╠═d7912d52-f141-4ed7-ac18-39a588891de6
-# ╠═82d4d058-1ac5-4c2a-b85a-a45ded8fe082
 # ╠═3569a3dc-a1d4-4574-9e60-a254c53377f1
-# ╠═64c7263e-e959-4068-a4d7-9f1c806ee893
 # ╠═0b7d99ac-a23d-4ced-8b27-f57741924bc9
-# ╠═ee75cb9c-6cae-4a38-bb1c-57af21f6dfd7
 # ╠═4dbcad70-c777-44b9-b838-810d0f258eaf
 # ╠═593f6fc2-8494-480e-ac04-c4ccb548795c
 # ╠═e49af556-b443-43ea-b319-7d47b74c9e98
