@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.4
+# v0.19.3
 
 using Markdown
 using InteractiveUtils
@@ -51,10 +51,14 @@ data[id_a, "Outcome"]
 # ╔═╡ 5cd90fd8-abb2-4d8c-8606-250c45811d2b
 smiles_b = data[id_b, "SMILES"]
 
+# ╔═╡ 03c431ed-d285-4013-8a0e-02e9a7f789c3
+data[348, "SMILES"]
+
 # ╔═╡ ce93e1c7-cccd-46bb-bdbe-7a8f0f75be70
 begin
 	mol_a = smilestomol(smiles_a)
 	mol_b = smilestomol(smiles_b)
+	other_mol = smilestomol(data[348, "SMILES"])
 end
 
 # ╔═╡ ea275a9a-a7df-49ff-9c71-ff88033ed28a
@@ -69,6 +73,12 @@ function viz_molecule(mol, savename)
 	svg_string = tosvg(canvas, 300, 300)
 	savesvg(svg_string, savename)
 	return svg_string
+end
+
+# ╔═╡ f27b6ba8-72b4-4ff2-bb8e-5bd8892771da
+begin
+	d = viz_molecule(other_mol, "mol_347.svg")
+	HTML(d)
 end
 
 # ╔═╡ b907dfea-cab3-4350-a51f-00f6e8cd7670
@@ -114,6 +124,9 @@ function viz_graph(mol::GraphMol)
           edgelinewidth=2,
           edgelabel = edgelabels)
 end
+
+# ╔═╡ a3f80472-8d74-4bad-b0a8-6a32cef149ed
+viz_graph(other_mol)
 
 # ╔═╡ 26ac6c3c-6f60-46b7-af9d-b4c3c35295a8
 begin
@@ -284,9 +297,12 @@ ne(axb)
 # ╠═95a5ed24-e1f7-45c2-95f9-ac3bcfd3b208
 # ╠═2db6218b-b74b-4dc4-8579-c6b70f6d3f3c
 # ╠═5cd90fd8-abb2-4d8c-8606-250c45811d2b
+# ╠═03c431ed-d285-4013-8a0e-02e9a7f789c3
 # ╠═ce93e1c7-cccd-46bb-bdbe-7a8f0f75be70
 # ╠═ea275a9a-a7df-49ff-9c71-ff88033ed28a
 # ╠═a6e669b2-bdf8-4786-bf30-6b73302cca27
+# ╠═f27b6ba8-72b4-4ff2-bb8e-5bd8892771da
+# ╠═a3f80472-8d74-4bad-b0a8-6a32cef149ed
 # ╠═b907dfea-cab3-4350-a51f-00f6e8cd7670
 # ╠═c6b5616b-d1a8-4cf1-b97b-cf0c142b1fa3
 # ╠═a521f480-c5b5-4a60-8f9f-52b45ad39dac
