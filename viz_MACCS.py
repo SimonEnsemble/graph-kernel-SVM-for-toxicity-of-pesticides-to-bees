@@ -9,9 +9,10 @@ import copy
 # load SMILES and compute MACCS fingerprints
 df = pd.read_csv("new_smiles.csv")
 smiles = [smile for smile in df["SMILES"]]
+y = [y_i for y_i in df["Outcome"]]
 
 hl_color = (0.5, 0.97, 0.73, 0.0) # first one is alpha
-grid_image_kwargs = {"molsPerRow": 12, "useSVG": True, "subImgSize": (250, 250)}
+grid_image_kwargs = {"useSVG": True, "subImgSize": (250, 250)}
 
 def build_highlight_colors():
     atom_colors = {}
@@ -21,10 +22,11 @@ def build_highlight_colors():
         bond_colors[i] = hl_color
     return atom_colors, bond_colors
 
-def get_mol(id_mol):
+def get_mol(id_mol, show_label=False):
     # get mol
     this_smiles = smiles[id_mol]
     mol = copy.deepcopy(Chem.MolFromSmiles(this_smiles))
+    print("label = ", y[id_mol])
     return mol
 
 def save_to_svg(svg_string, svg_filename):
@@ -83,16 +85,51 @@ def viz_maccs(id_mol, just_one=False):
         atom_color, bond_color = build_highlight_colors()
         atom_colors.append(atom_color)
         bond_colors.append(bond_color)
-    svg_string = Draw.MolsToGridImage(mols, highlightAtomLists=highlight_list, **grid_image_kwargs, 
+    svg_string = Draw.MolsToGridImage(mols, highlightAtomLists=highlight_list, **grid_image_kwargs, molsPerRow=12,
                                       highlightAtomColors=atom_colors, highlightBondColors=bond_colors)
     svg_filename = "mol_w_highlights_{}_{}.svg".format(id_mol, just_one)
     save_to_svg(svg_string, svg_filename)
     print("see ", svg_filename)
     # save to SVG
 
+def viz_maccs_multiple_mols(id_mols, onbits, just_one=False):
+    mols = []
+    highlight_list = []
+    atom_colors = []
+    bond_colors = []
+    for i, id_mol in enumerate(id_mols):
+        # get mol
+        mol = get_mol(id_mol, show_label=True)
+        mols.append(mol)
+
+        # compute maccs fingerprint; assert this is on
+        fp = MACCSkeys.GenMACCSKeys(mol)
+        assert onbits[i] in list(fp.GetOnBits())
+
+        # get smarts pattern and substructure corresponding to this on bit
+        smart = smartsPatts[onbits[i]][0]
+    
+        substructure = Chem.MolFromSmarts(smart)
+
+        # get highlights
+        highlight = get_highlight(mol, substructure, just_one)
+        atom_color, bond_color = build_highlight_colors()
+        
+        # append these highlights to list of highlights for each molecule
+        highlight_list.append(highlight)
+    
+        atom_color, bond_color = build_highlight_colors()
+        atom_colors.append(atom_color)
+        bond_colors.append(bond_color)
+    svg_string = Draw.MolsToGridImage(mols, highlightAtomLists=highlight_list, **grid_image_kwargs, molsPerRow=4,
+                                      highlightAtomColors=atom_colors, highlightBondColors=bond_colors)
+    svg_filename = "mulitple_mols_w_highlights_{}.svg".format(just_one)
+    save_to_svg(svg_string, svg_filename)
+    print("see ", svg_filename)
+
 def viz_one_maccs(id_mol, onbit, just_one=False):
     # get mol
-    mol = get_mol(id_mol)
+    mol = get_mol(id_mol, show_label=True)
 
     # compute maccs fingerprint; assert this is on
     fp = MACCSkeys.GenMACCSKeys(mol)
@@ -116,18 +153,8 @@ def viz_one_maccs(id_mol, onbit, just_one=False):
 # rsvg-convert -f pdf -o mygraph.pdf mol_w_highlights_347.svg to convert svg to pdf
 
 id_mol = 347
+viz_molecule(id_mol)
 viz_maccs(id_mol, False)
 viz_maccs(id_mol, True)
-viz_molecule(id_mol)
-
-print("check indexing in Python for onbits...")
-# nontoxic
-viz_one_maccs(288-1, 72, just_one=True)
-viz_one_maccs(265-1, 55, just_one=True)
-viz_one_maccs(1-1, 162, just_one=True)
-viz_one_maccs(52-1, 92, just_one=True)
-# toxic
-viz_one_maccs(257-1, 96, just_one=True)
-viz_one_maccs(114-1, 22, just_one=True)
-viz_one_maccs(174-1, 130, just_one=True)
-viz_one_maccs(206-1, 29, just_one=True)
+viz_maccs_multiple_mols([287, 264, 0, 51, 256, 113, 173, 205], [72, 55, 162, 92, 96, 22, 130, 29], True)
+viz_maccs_multiple_mols([287, 264, 0, 51, 256, 113, 173, 205], [72, 55, 162, 92, 96, 22, 130, 29], False)
