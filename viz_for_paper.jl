@@ -195,24 +195,38 @@ begin
 	nlist[1] = 1:6 # first shell
 	nlist[2] = 7:17 # second shell
 	@assert length(unique(vcat(nlist[1], nlist[2]))) == nv(axb)
-	_locs_x, _locs_y = shell_layout(axb, nlist)
-	locs_x = deepcopy(_locs_x)
-	locs_y = deepcopy(_locs_y)
-	# swap
-	locs_x[12] = _locs_x[13]
-	locs_x[13] = _locs_x[12]
-	locs_y[12] = _locs_y[13]
-	locs_y[13] = _locs_y[12]
-	
-	locs_x[9] = _locs_x[10]
-	locs_x[10] = _locs_x[9]
-	locs_y[9] = _locs_y[10]
-	locs_y[10] = _locs_y[9]
+	locs_x, locs_y = shell_layout(axb, nlist)
 
-	locs_x[1] = _locs_x[2]
-	locs_x[2] = _locs_x[1]
-	locs_y[1] = _locs_y[2]
-	locs_y[2] = _locs_y[1]
+	function swap!(i, j)
+		old_i = locs_x[i], locs_y[i]
+		old_j = locs_x[j], locs_y[j]
+		
+		locs_x[i] = deepcopy(old_j)[1]
+		locs_x[j] = deepcopy(old_i)[1]
+		locs_y[i] = deepcopy(old_j)[2]
+		locs_y[j] = deepcopy(old_i)[2]
+	end
+	# swap
+	swap!(12, 13)
+	swap!(10, 9)
+	swap!(1, 2)
+	swap!(7, 6)
+	swap!(8, 15)
+	swap!(10, 16)
+	# locs_x[12] = _locs_x[13]
+	# locs_x[13] = _locs_x[12]
+	# locs_y[12] = _locs_y[13]
+	# locs_y[13] = _locs_y[12]
+	
+	# locs_x[9] = _locs_x[10]
+	# locs_x[10] = _locs_x[9]
+	# locs_y[9] = _locs_y[10]
+	# locs_y[10] = _locs_y[9]
+
+	# locs_x[1] = _locs_x[2]
+	# locs_x[2] = _locs_x[1]
+	# locs_y[1] = _locs_y[2]
+	# locs_y[2] = _locs_y[1]
 	
 	locs_y[6] -= 0.1
 	locs_y[7] -= 0.1
@@ -226,6 +240,7 @@ begin
 		  EDGELABELSIZE=5.0,
 	      NODESIZE=0.7 / sqrt(nv(axb)),
 	      nodelabel=axb_nodelabel, # change to orderlist to debug
+		  # nodelabel=["$i" for i =1:nv(axb)],
 	      EDGELINEWIDTH=25.0/nv(axb),
 	      edgelabel=axb_edgelabel,
 	      edgelabelsize=2.0)
