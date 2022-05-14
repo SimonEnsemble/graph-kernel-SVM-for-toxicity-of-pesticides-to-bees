@@ -106,8 +106,9 @@ def viz_one_maccs(id_mol, onbit, just_one=False):
 
     # get highlights
     highlight = get_highlight(mol, substructure, just_one)
+    atom_colors, bond_colors = build_highlight_colors()
     
-    svg_string = Draw.MolsToGridImage([mol], highlightAtomLists=[highlight], **grid_image_kwargs)
+    svg_string = Draw.MolsToGridImage([mol], highlightAtomLists=[highlight], highlightAtomColors=[atom_colors], highlightBondColors=[bond_colors], molsPerRow=1, useSVG=True, subImgSize=(250, 250))
     svg_filename = "mol_w_highlights_{}_onbit_{}_{}.svg".format(id_mol, onbit, just_one)
     save_to_svg(svg_string, svg_filename)
     print("see ", svg_filename)
@@ -118,3 +119,15 @@ id_mol = 347
 viz_maccs(id_mol, False)
 viz_maccs(id_mol, True)
 viz_molecule(id_mol)
+
+print("check indexing in Python for onbits...")
+# nontoxic
+viz_one_maccs(288-1, 72, just_one=True)
+viz_one_maccs(265-1, 55, just_one=True)
+viz_one_maccs(1-1, 162, just_one=True)
+viz_one_maccs(52-1, 92, just_one=True)
+# toxic
+viz_one_maccs(257-1, 96, just_one=True)
+viz_one_maccs(114-1, 22, just_one=True)
+viz_one_maccs(174-1, 130, just_one=True)
+viz_one_maccs(206-1, 29, just_one=True)
