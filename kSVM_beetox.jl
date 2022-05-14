@@ -345,7 +345,7 @@ md"#### do the training and testing!"
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 500
+	n_runs = 1000
 	
 	# list of C-params of the SVC to loop over as candidate hyperparams
 	Cs = 10.0 .^ collect(range(-5, 1.0, length=7))
@@ -446,7 +446,7 @@ function viz_cv_results(L_opts::Vector{Int},
 	colorrange = (0, maximum([maximum(frequency), maximum(frequency_fp)]))
 
 	scale_factor = length(Cs) / length(Ls)
-	fig = Figure()#resolution=(800*scale_factor, 600))
+	fig = Figure(resolution=(600, 420))#resolution=(800*scale_factor, 600))
 
 	ax = Axis(fig[1, 1], 
 			  xlabel="walk length, L",
@@ -509,7 +509,7 @@ function viz_cv_results(L_opts::Vector{Int},
 
 	# Colorbar(fig[1, 3], hm, label="frequency", vertical=true)#,
 		#width=@lift Fixed($(pixelarea(ax.scene)).widths[1]))
-	# resize_to_layout!(fig)
+	resize_to_layout!(fig)
 	save("cv_results.pdf", fig)
 	return fig
 end
@@ -529,11 +529,11 @@ function viz_test_perf()
 	σ_fp = [std(f1_scores_fp), std(precisions_fp), 
 		std(recalls_fp), std(accuracies_fp)]
 	
-	fig = Figure()
+	fig = Figure(resolution = (620, 400))
 	ax = Axis(fig[1, 1], 
 		      xticks=(1:4, ["F1 score", "precision", "recall", "accuracy"]),
 		      yticks=0:0.2:1.0, title="performance on test set",
-		      xticklabelrotation=π/2,
+		      # xticklabelrotation=π/2,
 	)
 
 	colors = ColorSchemes.seaborn_colorblind6[end-1:end]
@@ -571,6 +571,7 @@ function viz_test_perf()
 	)
 	
 	ylims!(0, 1)
+	resize_to_layout!(fig)
 	save("test_performance_results.pdf", fig)
 	return fig
 end
@@ -624,7 +625,7 @@ X_MACCS = npzread("MACCS_X.npy")
 
 # ╔═╡ 188ee202-0153-4cf3-9b08-c817cc24f619
 begin
-	function interpret_MACCS_SVM(;n_print::Int=5)
+	function interpret_MACCS_SVM(;n_print::Int=4)
 		Random.seed!(97330)
 		#=
 		train SVC on all data with MACCS finerprint
@@ -652,23 +653,6 @@ begin
 		end
 		ids_sorted_w = sortperm(w)
 
-		println("lowest w (makes it nontoxic)")
-		for i = 1:n_print
-			id = ids_sorted_w[i]
-			m_ids = find_example(id, -1)
-			@printf("\tw[%d] = %.2f\n", id, w[id])
-			println("\t\texample: molecules ", rand(m_ids))
-		end
-
-		println("highest w (makes it toxic)")
-		for i = 1:n_print
-			id = reverse(ids_sorted_w)[i]
-			m_ids = find_example(id, 1)
-			@printf("\tw[%d] = %.2f\n", id, w[id])
-			println("\t\texample: molecules ", rand(m_ids))
-		end
-		
-
 		#= 
 		visualize wᵢ
 		=#
@@ -682,6 +666,27 @@ begin
 		barplot!(1:166, w, color=w_colors)
 		xlims!(1, 166)
 		ylims!(-0.5, 0.5)
+
+		println("lowest w (makes it nontoxic)")
+		for i = 1:n_print
+			id = ids_sorted_w[i]
+			m_ids = find_example(id, -1)
+			scatter!([id], [w[id]], color="black", 
+				marker=:star8, markersize=16)
+			@printf("\tw[%d] = %.2f\n", id, w[id])
+			println("\t\texample: molecules ", rand(m_ids))
+		end
+
+		println("highest w (makes it toxic)")
+		for i = 1:n_print
+			id = reverse(ids_sorted_w)[i]
+			m_ids = find_example(id, 1)
+			scatter!([id], [w[id]], color="black", 
+				marker=:star8, markersize=16)
+			# scatter!(id, w[id], color=colors["Toxic"])
+			@printf("\tw[%d] = %.2f\n", id, w[id])
+			println("\t\texample: molecules ", rand(m_ids))
+		end
 		save("SVM_w.pdf", fig)
 		return fig
 	end
