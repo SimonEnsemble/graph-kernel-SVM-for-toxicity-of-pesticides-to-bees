@@ -529,7 +529,7 @@ function viz_test_perf()
 	σ_fp = [std(f1_scores_fp), std(precisions_fp), 
 		std(recalls_fp), std(accuracies_fp)]
 	
-	fig = Figure(resolution = (620, 400))
+	fig = Figure(resolution = (600, 275))
 	ax = Axis(fig[1, 1], 
 		      xticks=(1:4, ["F1 score", "precision", "recall", "accuracy"]),
 		      yticks=0:0.2:1.0, title="performance on test set",
@@ -554,12 +554,12 @@ function viz_test_perf()
 	errorbars!(collect(1:4) .+ 1/5, perf_fp, σ_fp)
 	for i = 1:4
 		text!(@sprintf("%.2f", perf[i]), 
-			position=(i - 1/5, 0.025),
+			position=(i - 1/5, 0.04),
 			color="black", align=(:center, :center),
 			textsize=12
 		)
 		text!(@sprintf("%.2f", perf_fp[i]), 
-			position=(i + 1/5, 0.025),
+			position=(i + 1/5, 0.04),
 			color="black", align=(:center, :center),
 			textsize=12
 		)
@@ -657,7 +657,8 @@ begin
 		visualize wᵢ
 		=#
 		w_colors = [wᵢ < 0.0 ? colors["Nontoxic"] : colors["Toxic"] for wᵢ in w]
-		fig = Figure()
+
+		fig = Figure(resolution=(900, 300))
 		ax  = Axis(fig[1, 1], ylabel="coefficient, wᵢ", xlabel="MACCS key i",
 			xticks=(1:166, ["" for i = 1:166]), yticks=-0.5:0.1:0.5,
 		    ygridvisible=false
@@ -665,34 +666,61 @@ begin
 		hlines!(ax, [0], color="gray")
 		barplot!(1:166, w, color=w_colors)
 		xlims!(1, 166)
-		ylims!(-0.5, 0.5)
+		ylims!(-0.51, 0.51)
 
-		println("lowest w (makes it nontoxic)")
-		for i = 1:n_print
-			id = ids_sorted_w[i]
-			m_ids = find_example(id, -1)
-			scatter!([id], [w[id]], color="black", 
-				marker=:star8, markersize=16)
-			@printf("\tw[%d] = %.2f\n", id, w[id])
-			println("\t\texample: molecules ", rand(m_ids))
-		end
-
+		mol_ids_for_python = Int[]
+		macc_ids_for_python = Int[]
 		println("highest w (makes it toxic)")
 		for i = 1:n_print
 			id = reverse(ids_sorted_w)[i]
+			push!(macc_ids_for_python, id)
 			m_ids = find_example(id, 1)
 			scatter!([id], [w[id]], color="black", 
 				marker=:star8, markersize=16)
 			# scatter!(id, w[id], color=colors["Toxic"])
+			ex_mol = rand(m_ids)
 			@printf("\tw[%d] = %.2f\n", id, w[id])
-			println("\t\texample: molecules ", rand(m_ids))
+			println("\t\texample: molecules ", ex_mol)
+			push!(mol_ids_for_python, ex_mol-1)
 		end
+		
+		println("lowest w (makes it nontoxic)")
+		for i = 1:n_print
+			id = ids_sorted_w[i]
+			push!(macc_ids_for_python, id)
+			m_ids = find_example(id, -1)
+			scatter!([id], [w[id]], color="black", 
+				marker=:star8, markersize=16)
+			@printf("\tw[%d] = %.2f\n", id, w[id])
+			ex_mol = rand(m_ids)
+			println("\t\texample: molecules ", ex_mol)
+			push!(mol_ids_for_python, ex_mol-1)
+		end
+		println("for python:")
+		println("\tmols = ", mol_ids_for_python)
+		println("\tonbits = ", macc_ids_for_python)
 		save("SVM_w.pdf", fig)
 		return fig
 	end
 
 	interpret_MACCS_SVM()
 end
+
+# ╔═╡ 64e81dab-bc0d-4054-a59c-847d2dce8d15
+md"### covariance of MACCS FPs"
+
+# ╔═╡ 208a9160-7db9-40c4-b3c0-3264d66f832c
+function viz_MACCS_corr()
+	fig = Figure()
+	ax  = Axis(fig[1, 1], xlabel="MACCS key", ylabel="MACCS key", aspect=DataAspect())
+	hm = heatmap!(cor(X_MACCS), colorrange=(-1, 1), colormap=reverse(ColorSchemes.diverging_gwr_55_95_c38_n256))
+	Colorbar(fig[1, 2], hm, label="correlation")
+	save("maccs_correlation.pdf", fig)
+	fig
+end
+
+# ╔═╡ 19dd84b1-82d5-4fcf-b931-668dc68d3418
+viz_MACCS_corr()
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2179,5 +2207,8 @@ version = "3.5.0+0"
 # ╠═c1a8443a-fbe5-4c9e-99c4-ef4c869409df
 # ╠═d3aba031-4f45-446e-adef-13a6d4a7a93e
 # ╠═188ee202-0153-4cf3-9b08-c817cc24f619
+# ╟─64e81dab-bc0d-4054-a59c-847d2dce8d15
+# ╠═208a9160-7db9-40c4-b3c0-3264d66f832c
+# ╠═19dd84b1-82d5-4fcf-b931-668dc68d3418
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
