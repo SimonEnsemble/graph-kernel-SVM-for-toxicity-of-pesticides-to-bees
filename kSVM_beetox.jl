@@ -151,7 +151,6 @@ begin
 	Ks = Dict{Int, Matrix{Float64}}()
 	toxicity = []
 	mols = []
-	@info "scaling by size of molecules"
 	for L in Ls
 		# load data from compute_Gram_matrix.jl
 		jldfilename = joinpath("gram_matrices",
@@ -159,11 +158,12 @@ begin
 		mols = load(jldfilename, "mols")
 		toxicity = Vector(load(jldfilename, "toxicity"))
 		Ks[L] = load(jldfilename, "K")
+        # if we wished to scale...
 		for i = 1:length(toxicity)
 			for j = 1:length(toxicity)
 				nᵢ = length(atomsymbol(mols[i]))
 				nⱼ = length(atomsymbol(mols[j]))
-				Ks[L][i, j] /= nᵢ * nⱼ
+				# Ks[L][i, j] /= nᵢ * nⱼ
 			end
 		end
 	end
@@ -211,7 +211,7 @@ end
 
 # ╔═╡ 4c01515b-b2a2-425f-a258-4e6c0b9ba7e7
 compare_similarities(K_fp, Ks[6],
-	L"$k^{MACCS}(G, G^\prime)$", L"$k^{(L=6)}(G, G^\prime)$", lo=-2000.0, hi=3000.0)
+	L"$k^{MACCS}(G, G^\prime)$", L"$k^{(L=6)}(G, G^\prime)$", lo=-1e6, hi=1e6)
 
 # ╔═╡ 119ffdca-7f51-4e71-b825-843da6a75413
 y = map(t -> class_to_int[t], toxicity) # target vector
@@ -345,10 +345,10 @@ md"#### do the training and testing!"
 # ╔═╡ 4178d448-bb47-4f70-ab60-7d0307ef8829
 begin
 	n_folds = 3
-	n_runs = 1000
+	n_runs = 1500
 	
 	# list of C-params of the SVC to loop over as candidate hyperparams
-	Cs = 10.0 .^ collect(range(-5, 1.0, length=7))
+	Cs = 10.0 .^ collect(range(-6, 1.0, length=8))
 	
 	# store test set performance metrics
 	@assert class_to_int["Toxic"] == 1 # for toxic = "positive"
