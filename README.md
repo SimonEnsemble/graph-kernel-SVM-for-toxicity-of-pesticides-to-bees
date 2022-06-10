@@ -1,4 +1,4 @@
-### classifying the toxicity of pesticides to honey bees via support vector machines and the random walk graph kernel
+### Classifying the toxicity of pesticides to honey bees via support vector machines with random walk graph kernels
 
 Python and Julia code to reproduce the results of our paper:
 > P. Yang, A. Henle, X. Fern, C. Simon. Classifying the toxicity of pesticides to honey bees via support vector machines with random walk graph kernels. _The Journal of Chemical Physics_. 2022. DOI: 10.1063/5.0090573. [link](https://aip.scitation.org/doi/10.1063/5.0090573)
@@ -14,6 +14,7 @@ Python and Julia code to reproduce the results of our paper:
 * open `kSVM_beetox.jl` in Pluto to train and evaluate the SVMs and produce the plots in the paper.
 
 other scripts useful to us but likely not as useful to others:
+
 :bee: the Julia scripts `test_run_time.jl` and `runtime_plot.jl` are to assess the run time.
 
 :bee: open `toy_svm.jl` in Pluto to make a toy SVM visualization for talks.
